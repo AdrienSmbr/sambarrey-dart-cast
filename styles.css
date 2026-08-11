@@ -1,19 +1,19 @@
 /*
   Feuille de style du scoreboard distant.
 
-  Contraintes propres à une télé, qui expliquent la plupart des choix :
-   - on regarde de loin -> typographie énorme et contrastes forts ;
-   - les téléviseurs rognent les bords (overscan) -> marge de sécurité en vw/vh ;
-   - le Chromecast a un processeur modeste -> animations uniquement sur
-     `transform` et `opacity`, les seules propriétés que le compositeur GPU
-     traite sans repasser par la mise en page.
+  Reprend EXACTEMENT la grammaire visuelle des écrans Compose de l'app (pas une
+  interprétation) : mêmes couleurs (Color.kt/Theme.kt), mêmes rayons de coin,
+  mêmes règles d'opacité pour les états actif/éliminé/killer/fermé. Pas de halo
+  ni de glow — Material3 en mode sombre est plat, l'app ne fait jamais flouter
+  une bordure ou un fond.
+
+  Contraintes propres à une télé : on regarde de loin -> typographie énorme ;
+  les téléviseurs rognent les bords (overscan) -> marge de sécurité en vw/vh ;
+  le Chromecast a un processeur modeste -> animations uniquement sur `transform`
+  et `opacity`, les seules propriétés que le compositeur GPU traite sans
+  repasser par la mise en page.
 */
 
-/*
-  Palette alignée sur celle de l'app (Color.kt / Theme.kt, palette sombre) :
-  même orange, même vert, même bleu, même gris de fond. La télé doit se
-  reconnaître comme le même produit que la tablette, pas comme un site à part.
-*/
 :root {
   --bg: #121214;          /* DarkBackground */
   --surface: #1e1e24;     /* DarkSurface */
@@ -21,11 +21,11 @@
   --text: #f1f1f5;        /* OnDarkText */
   --muted: #a0a0b2;       /* OnDarkSubtext */
   --primary: #ff6d00;     /* DartPrimary — orange */
-  --secondary: #00c853;   /* DartSecondary — vert, cible du checkout */
+  --primary-container: #e65100; /* DartPrimaryVariant, utilisé comme fond teinté */
+  --secondary: #00c853;   /* DartSecondary — vert */
   --tertiary: #2979ff;    /* DartAccent — bleu électrique */
-  --danger: #ff1744;      /* RedBust */
+  --danger: #ff1744;      /* RedBust / error */
   --gold: #ffc107;        /* GoldWinner */
-  --accent: var(--primary);
   --safe-x: 4vw;
   --safe-y: 4vh;
 }
@@ -42,17 +42,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-body::before {
-  /* Halo d'ambiance, purement décoratif et statique : aucun coût par image. */
-  content: "";
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(90vw 70vh at 50% -10%, rgba(255, 109, 0, 0.10) 0%, transparent 60%),
-    radial-gradient(60vw 50vh at 100% 110%, rgba(41, 121, 255, 0.10) 0%, transparent 60%);
-  pointer-events: none;
-}
-
 .hidden { display: none !important; }
 
 /* `height: 100%` des enfants n'a de sens que si le conteneur a lui-même une
@@ -66,6 +55,12 @@ body::before {
   pointer-events: none;
   z-index: 40;
 }
+
+/* Bloc utilitaire : le remplissage teinté à faible opacité que l'app utilise
+   partout (primaryContainer.copy(alpha=X)) au lieu de couleurs pleines. */
+.tint-primary-weak { background: rgba(255, 109, 0, 0.15); }
+.tint-primary-mid { background: rgba(255, 109, 0, 0.20); }
+.tint-error-weak { background: rgba(255, 23, 68, 0.20); }
 
 /* ---------------------------------------------------------------- ATTENTE */
 
@@ -99,7 +94,6 @@ body::before {
   height: 18%;
   border-radius: 50%;
   background: var(--primary);
-  box-shadow: 0 0 4vh rgba(255, 109, 0, 0.7);
 }
 
 @keyframes pulse {
@@ -130,76 +124,83 @@ body::before {
   gap: 2vw;
 }
 
-.match { display: flex; flex-direction: column; min-width: 14vw; }
-.match-title { font-size: 4.4vh; font-weight: 900; line-height: 1; }
-.match-turn { font-size: 2vh; color: var(--muted); margin-top: 0.6vh; }
+.match { display: flex; flex-direction: column; min-width: 12vw; }
+.match-title { font-size: 4vh; font-weight: 900; line-height: 1; }
+.match-turn { font-size: 1.8vh; color: var(--muted); margin-top: 0.6vh; }
 
-/* Bandeau « au tour de » : le repère le plus important de l'écran. */
+/*
+  Bandeau « au tour de » : pilule à fond primaryContainer(alpha .55), bordure
+  primary qui PULSE EN OPACITÉ (0.55 -> 1, comme rememberInfiniteTransition
+  côté app) — jamais de flou, l'app n'en a aucun.
+*/
 .turn-banner {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.4vw;
-  padding: 1.4vh 2vw;
+  gap: 1.2vw;
+  padding: 1.2vh 2vw;
   border-radius: 99px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
-  border: 0.3vh solid var(--player-color, var(--primary));
-  box-shadow: 0 0 4vh -1vh var(--player-color, var(--primary));
+  background: rgba(255, 109, 0, 0.16);
+  border: 0.28vh solid var(--primary);
+  animation: turnPulse 1.1s ease-in-out infinite alternate;
+}
+@keyframes turnPulse {
+  from { border-color: rgba(255, 109, 0, 0.55); }
+  to { border-color: rgba(255, 109, 0, 1); }
 }
 
 .turn-avatar {
-  width: 6.4vh;
-  height: 6.4vh;
+  width: 5.6vh;
+  height: 5.6vh;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 3vh;
-  font-weight: 900;
+  font-size: 2.6vh;
+  font-weight: 700;
   background: var(--player-color, var(--primary));
   color: #fff;
   flex: none;
 }
 
 .turn-label {
-  font-size: 2.2vh;
-  text-transform: uppercase;
-  letter-spacing: 0.35em;
+  font-size: 1.8vh;
+  font-weight: 800;
   color: var(--muted);
 }
 
 .turn-name {
-  font-size: 5vh;
+  font-size: 4.2vh;
   font-weight: 900;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  color: var(--primary);
+  text-transform: uppercase;
 }
 
-/* Le nom entre en glissant : c'est ce qui rend le changement de joueur lisible
-   d'un bout à l'autre de la pièce, même sans regarder l'écran en continu. */
-.turn-name.enter { animation: nameIn 520ms cubic-bezier(.16,1,.3,1); }
+.turn-name.enter { animation: nameIn 400ms cubic-bezier(.2,.8,.2,1); }
 @keyframes nameIn {
-  from { opacity: 0; transform: translateX(6vw) scale(0.9); }
+  from { opacity: 0; transform: translateX(4vw); }
   to { opacity: 1; transform: none; }
 }
 
-.darts-strip { display: flex; gap: 0.8vw; min-width: 14vw; justify-content: flex-end; }
+.darts-strip { display: flex; gap: 0.7vw; min-width: 12vw; justify-content: flex-end; }
 
 .dart {
-  min-width: 6vh;
-  padding: 1vh 1.2vh;
-  border-radius: 1.2vh;
+  min-width: 5.5vh;
+  padding: 0.9vh 1.1vh;
+  border-radius: 1vh;
   background: var(--surface-2);
-  font-size: 2.6vh;
+  font-size: 2.3vh;
   font-weight: 800;
   text-align: center;
-  animation: dartIn 260ms cubic-bezier(.16,1,.3,1);
+  animation: dartIn 220ms cubic-bezier(.2,.8,.2,1);
 }
 .dart.miss { color: var(--muted); }
-.dart.big { background: var(--primary); color: #131313; }
+.dart.big { background: var(--primary); color: #fff; }
 
 @keyframes dartIn {
-  from { opacity: 0; transform: translateY(-1.5vh) scale(0.8); }
+  from { opacity: 0; transform: translateY(-1vh); }
   to { opacity: 1; transform: none; }
 }
 
@@ -208,172 +209,311 @@ body::before {
 .players {
   flex: 1;
   display: grid;
-  gap: 1.6vh 1.6vw;
+  gap: 1.4vh 1.4vw;
   align-content: stretch;
   min-height: 0;
-  /* Sans ça les rangées implicites se dimensionnent sur leur contenu et les
-     cartes se tassent en haut de l'écran au lieu d'occuper la télé entière. */
   grid-auto-rows: 1fr;
 }
-/* Le nombre de colonnes suit l'effectif : à deux joueurs on veut deux gros
-   panneaux, à six on veut une grille. */
 .players[data-count="1"], .players[data-count="2"] { grid-template-columns: repeat(2, 1fr); }
 .players[data-count="3"] { grid-template-columns: repeat(3, 1fr); }
 .players[data-count="4"] { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
 .players[data-count="5"], .players[data-count="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
 .players[data-count="many"] { grid-template-columns: repeat(4, 1fr); }
 
+/*
+  Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp (X01/team) ou 2dp
+  (killer) selon l'app, fond surfaceVariant au repos, primaryContainer(alpha)
+  quand active. Aucune ombre, aucun flou.
+*/
 .card {
   position: relative;
-  border-radius: 2.4vh;
-  background: var(--surface);
+  border-radius: 2.2vh;
+  background: var(--surface-2);
   border: 0.3vh solid transparent;
-  padding: 2.2vh 2vw;
+  padding: 1.8vh 1.8vw;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
-  transition: transform 380ms cubic-bezier(.16,1,.3,1), border-color 380ms, background 380ms;
+  transition: border-color 260ms, background-color 260ms;
 }
 
 .card.active {
-  border-color: var(--player-color);
-  background: var(--surface-2);
-  transform: scale(1.03);
-  box-shadow: 0 0 6vh -2vh var(--player-color);
+  border-color: var(--player-color, var(--primary));
+  background: color-mix(in srgb, var(--player-color, var(--primary)) 22%, var(--surface));
 }
 
-.card.eliminated { opacity: 0.45; filter: grayscale(0.7); }
+/* Killer : fond/bordure fixes hors tour actif (l'app les garde même sans être
+   le joueur en train de lancer, contrairement au X01). */
+.card.killer-status { background: rgba(255, 109, 0, 0.18); border-color: rgba(255, 109, 0, 0.6); }
+.card.eliminated-status {
+  background: rgba(255, 23, 68, 0.14);
+  border-color: rgba(255, 23, 68, 0.4);
+  filter: grayscale(0.35);
+}
+.card.eliminated-status .name { color: var(--muted); }
 
 .card-head { display: flex; align-items: center; gap: 1vw; }
 
 .avatar {
-  width: 7vh;
-  height: 7vh;
+  width: 6vh;
+  height: 6vh;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 3.4vh;
-  font-weight: 900;
+  font-size: 2.8vh;
+  font-weight: 700;
   color: #fff;
   flex: none;
 }
 
 .name {
-  font-size: 3.6vh;
-  font-weight: 800;
+  font-size: 3.2vh;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .team-tag {
-  font-size: 1.8vh;
+  font-size: 1.6vh;
   font-weight: 800;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
   color: var(--muted);
   text-transform: uppercase;
 }
 
 .score {
-  font-size: 12vh;
-  font-weight: 900;
+  font-size: 10vh;
+  font-weight: 800;
   line-height: 0.9;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.card.active .score { color: var(--player-color); }
+.card.active .score { color: var(--player-color, var(--primary)); }
 
-/* Le score « encaisse » le coup quand il change : repère visuel immédiat. */
-.score.bump { animation: bump 420ms cubic-bezier(.16,1,.3,1); }
+.score.bump { animation: bump 380ms cubic-bezier(.2,.8,.2,1); }
 @keyframes bump {
   0% { transform: scale(1); }
-  35% { transform: scale(1.18); }
+  35% { transform: scale(1.16); }
   100% { transform: scale(1); }
 }
 
-.sub { font-size: 2vh; color: var(--muted); }
+.sub { font-size: 1.9vh; color: var(--muted); }
 
-/* Flammes du joueur killer : deux dégradés animés en `transform` seulement.
-   Volontairement pas une animation Lottie — sur un Chromecast, un brasier
-   vectoriel de plusieurs centaines de calques coûte bien plus cher que ça. */
+/* Pilule "N° X" du Killer : primary(alpha .2), rayon 8dp -> 1.1vh. */
+.target-pill {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 0.6vh;
+  padding: 0.3vh 1.2vh;
+  border-radius: 1.1vh;
+  background: rgba(255, 109, 0, 0.2);
+  color: var(--primary);
+  font-size: 2.6vh;
+  font-weight: 800;
+}
+
+/* Flammes du joueur killer : dégradés animés en `transform`/`opacity`
+   uniquement, jamais de Lottie ici — sur un Chromecast, un brasier vectoriel
+   de centaines de calques coûte largement plus cher qu'un dégradé CSS. */
 .flames {
   position: absolute;
   left: -10%;
   right: -10%;
   bottom: -8%;
-  height: 40%;
+  height: 42%;
   pointer-events: none;
+  opacity: 0.55;
   background:
-    radial-gradient(closest-side, rgba(255, 138, 0, 0.55), transparent 70%) 10% 100% / 30% 100% no-repeat,
-    radial-gradient(closest-side, rgba(255, 61, 0, 0.5), transparent 70%) 45% 100% / 34% 100% no-repeat,
-    radial-gradient(closest-side, rgba(255, 179, 0, 0.5), transparent 70%) 80% 100% / 30% 100% no-repeat;
+    radial-gradient(closest-side, rgba(255, 138, 0, 0.6), transparent 70%) 10% 100% / 30% 100% no-repeat,
+    radial-gradient(closest-side, rgba(255, 61, 0, 0.55), transparent 70%) 45% 100% / 34% 100% no-repeat,
+    radial-gradient(closest-side, rgba(255, 179, 0, 0.55), transparent 70%) 80% 100% / 30% 100% no-repeat;
   animation: flicker 2.4s ease-in-out infinite;
 }
 @keyframes flicker {
-  0%, 100% { transform: scaleY(1) translateY(0); opacity: 0.85; }
-  50% { transform: scaleY(1.25) translateY(-4%); opacity: 1; }
+  0%, 100% { transform: scaleY(1) translateY(0); opacity: 0.45; }
+  50% { transform: scaleY(1.22) translateY(-4%); opacity: 0.6; }
 }
 
-/* Marques du Cricket */
-.marks { display: flex; flex-direction: column; gap: 0.5vh; }
-.mark-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6vw; }
-.mark-label { font-size: 2vh; font-weight: 700; color: var(--muted); width: 4vw; }
-.mark-pips { display: flex; gap: 0.4vw; }
-.pip {
-  width: 1.6vh; height: 1.6vh; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
+/*
+  Badge de statut Killer (bas-droite de la carte), 4 variantes exactement
+  comme KillerStatusBadge() : compétitif (cœur + vies), éliminé, killer
+  (flamme + barres), et le compte de touches par défaut en barres | | |.
+*/
+.status-badge {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6vh;
+  padding: 0.8vh 1.4vh;
+  border-radius: 1.6vh;
+  font-size: 2.2vh;
+  font-weight: 800;
 }
-.pip.on { background: var(--player-color); }
-.mark-row.closed .mark-label { color: var(--text); text-decoration: line-through; }
+.status-badge.touches { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
+.status-badge.lives { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
+.status-badge.lives .icon { color: var(--danger); }
+.status-badge.killer { background: var(--primary); color: #fff; }
+.status-badge.eliminated { background: rgba(255, 23, 68, 0.2); color: var(--danger); font-size: 1.9vh; }
+.status-badge .icon { width: 2.2vh; height: 2.2vh; flex: none; }
 
-/* Vies / touches du Killer */
-.lives { display: flex; gap: 0.6vw; align-items: center; }
-.life { font-size: 3.4vh; }
+/* ------------------------------------------------------------- CRICKET */
+
+/*
+  Reproduit exactement CricketScoreboardView : colonne CIBLE à gauche (les 7
+  numéros en pilules), une colonne par joueur/équipe à droite, chaque cellule
+  alignée avec sa cible via une grille de lignes identique sur toutes les
+  colonnes (en-tête de hauteur fixe + 7 lignes de poids égal).
+*/
+.cricket-board {
+  flex: 1;
+  display: flex;
+  gap: 0.9vw;
+  min-height: 0;
+  background: var(--surface-2);
+  border-radius: 2vh;
+  padding: 1.6vh 1.2vw;
+}
+
+.cricket-col {
+  display: grid;
+  grid-template-rows: 13vh repeat(7, 1fr);
+  row-gap: 0.7vh;
+  height: 100%;
+}
+.cricket-target-col { width: 9vw; flex: none; }
+.cricket-player-col { flex: 1; min-width: 0; }
+
+.cricket-target-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.cricket-target-head .big { font-size: 2vh; font-weight: 800; color: var(--muted); }
+.cricket-target-head .small { font-size: 1.3vh; color: var(--muted); opacity: 0.7; }
+
+.cricket-target-cell {
+  border-radius: 1vh;
+  background: rgba(255, 109, 0, 0.2);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  font-size: 2.1vh;
+  font-weight: 800;
+}
+
+.cricket-head {
+  border-radius: 1.4vh;
+  background: var(--surface);
+  border: 0.25vh solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3vh;
+  padding: 0.6vh;
+  overflow: hidden;
+}
+.cricket-col.active .cricket-head {
+  background: rgba(255, 109, 0, 0.28);
+  border-color: var(--primary);
+}
+.cricket-head .row { display: flex; align-items: center; gap: 0.6vh; max-width: 100%; }
+.cricket-head .name {
+  font-size: 1.9vh;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cricket-head .score { font-size: 2.6vh; font-weight: 800; color: var(--text); }
+.cricket-col.active .cricket-head .score { color: var(--primary); }
+.cricket-head .team-tag { font-size: 1.3vh; color: var(--tertiary); font-weight: 800; }
+
+.cricket-cell {
+  border-radius: 1vh;
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  place-items: center;
+}
+.cricket-col.active .cricket-cell { background: var(--surface); }
+
+.mark-dot { font-size: 2.4vh; color: var(--muted); opacity: 0.35; }
+.mark-slash, .mark-x { font-size: 2.8vh; font-weight: 800; color: var(--primary); }
+.mark-closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4vh;
+  padding: 0.4vh 0.9vh;
+  border-radius: 0.7vh;
+  background: var(--secondary);
+  color: #fff;
+  font-size: 1.3vh;
+  font-weight: 800;
+}
+.mark-closed .icon { width: 1.4vh; height: 1.4vh; }
+
+/* Avatar miniature dans l'en-tête de colonne Cricket. */
+.cricket-avatar {
+  width: 3vh;
+  height: 3vh;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.5vh;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+}
 
 /* ------------------------------------------------------------ BAS D'ÉCRAN */
 
-.bottombar { display: flex; gap: 1.6vw; min-height: 7vh; align-items: center; }
+.bottombar { display: flex; gap: 1.4vw; min-height: 6.5vh; align-items: center; }
 
+/* Checkout : remplissage plat secondary(alpha .2), AUCUNE bordure — l'app
+   n'en dessine pas. */
 .checkout {
   flex: 1;
-  padding: 1.6vh 2vw;
+  padding: 1.4vh 1.8vw;
   border-radius: 1.6vh;
-  /* Vert et non orange : c'est la couleur exacte du bandeau de checkout côté
-     tablette (CheckoutBanner.kt utilise déjà colorScheme.secondary). */
-  background: rgba(0, 200, 83, 0.14);
-  border: 0.25vh solid rgba(0, 200, 83, 0.5);
-  font-size: 3vh;
+  background: rgba(0, 200, 83, 0.2);
+  font-size: 2.6vh;
   font-weight: 800;
   display: flex;
   align-items: center;
-  gap: 1vw;
+  gap: 0.9vw;
 }
-.checkout .label { color: var(--secondary); text-transform: uppercase; letter-spacing: 0.2em; font-size: 2vh; }
+.checkout .icon { width: 2.6vh; height: 2.6vh; color: var(--secondary); flex: none; }
+.checkout .label { color: var(--secondary); font-weight: 700; }
+.checkout .value { color: var(--text); font-weight: 800; }
 
+/* Bust : remplissage plat error(alpha .2), pas de bordure non plus. */
 .bust {
   flex: 1;
-  padding: 1.6vh 2vw;
+  padding: 1.4vh 1.8vw;
   border-radius: 1.6vh;
-  background: rgba(255, 77, 77, 0.18);
-  border: 0.25vh solid var(--danger);
-  color: #ffd9d9;
-  font-size: 3vh;
-  font-weight: 800;
-  animation: shake 480ms;
+  background: rgba(255, 23, 68, 0.2);
+  color: var(--danger);
+  font-size: 2.6vh;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.9vw;
 }
+.bust .icon { width: 2.6vh; height: 2.6vh; flex: none; }
 
+/* Secousse de tout l'écran pendant une alerte Killer. */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  15% { transform: translateX(-1.2vw); }
-  35% { transform: translateX(1vw); }
-  55% { transform: translateX(-0.6vw); }
-  80% { transform: translateX(0.4vw); }
+  15% { transform: translateX(-1.1vw); }
+  35% { transform: translateX(0.9vw); }
+  55% { transform: translateX(-0.5vw); }
+  80% { transform: translateX(0.3vw); }
 }
-
-/* Secousse de tout l'écran, réservée aux gros moments. */
-.quake { animation: shake 520ms; }
+.quake { animation: shake 480ms; }
+.bust { animation: shake 440ms; }
 
 /* ------------------------------------------------------------ BALAYAGE FX */
 
@@ -383,10 +523,10 @@ body::before {
   z-index: 30;
   pointer-events: none;
   opacity: 0;
-  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.18) 50%, transparent 65%);
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.14) 50%, transparent 65%);
   transform: translateX(-100%);
 }
-.sweep.run { animation: sweep 700ms ease-out; }
+.sweep.run { animation: sweep 650ms ease-out; }
 @keyframes sweep {
   0% { opacity: 1; transform: translateX(-100%); }
   100% { opacity: 0; transform: translateX(100%); }
@@ -394,34 +534,39 @@ body::before {
 
 /* -------------------------------------------------------------- OVERLAYS */
 
+/*
+  L'app couvre l'écran d'une carte pleine couleur (KillerAlertOverlay :
+  containerColor = accentColor, pas de fond noir translucide) : on reprend ce
+  parti — une teinte franche, pas un voile sombre avec du texte coloré dessus.
+*/
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
   display: grid;
   place-items: center;
-  background: rgba(4, 5, 10, 0.86);
-  animation: fadeIn 260ms ease-out;
+  background: var(--overlay-color, var(--primary));
+  animation: fadeIn 200ms ease-out;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .overlay-inner {
   text-align: center;
-  animation: overlayPop 620ms cubic-bezier(.16,1,.3,1);
+  animation: overlayPop 520ms cubic-bezier(.2,.8,.2,1);
 }
 @keyframes overlayPop {
-  0% { opacity: 0; transform: scale(0.7) translateY(4vh); }
+  0% { opacity: 0; transform: scale(0.8) translateY(3vh); }
   100% { opacity: 1; transform: none; }
 }
 
-.overlay-icon { font-size: 16vh; line-height: 1; }
+.overlay-icon { font-size: 14vh; line-height: 1; }
 .overlay-title {
-  font-size: 5vh;
+  font-size: 4.6vh;
   font-weight: 900;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--overlay-color, var(--accent));
+  color: #fff;
   margin-top: 1vh;
 }
-.overlay-name { font-size: 11vh; font-weight: 900; line-height: 1.05; }
-.overlay-sub { font-size: 3vh; color: var(--muted); margin-top: 1vh; }
+.overlay-name { font-size: 9vh; font-weight: 900; line-height: 1.05; color: #fff; }
+.overlay-sub { font-size: 2.6vh; color: rgba(255, 255, 255, 0.85); margin-top: 1vh; }

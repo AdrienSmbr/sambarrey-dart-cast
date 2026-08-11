@@ -5,6 +5,10 @@
   partie à chaque changement, cette page ne fait que l'afficher. Aucun état de
   jeu n'est calculé ici, ce qui évite toute divergence entre les deux écrans.
 
+  Le rendu reprend délibérément la grammaire visuelle des composables Compose
+  de l'app (couleurs, rayons, badges) plutôt qu'une interprétation libre : la
+  télé doit se sentir comme le même produit que la tablette.
+
   Protocole (canal `urn:x-cast:com.sambarrey.dart`) : voir docs/protocole-cast.md
 */
 
@@ -35,9 +39,24 @@ const dom = {
   app: el('app'),
 };
 
+/** Icônes en ligne : mêmes glyphes que les `Icon()` Compose, en SVG minimal. */
+const ICONS = {
+  heart: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-6.7-4.35-9.33-8.2C.9 10.02 1.4 6.6 4.1 5.1c2.1-1.17 4.53-.6 5.9 1.2.3.4.8 1 .8 1s.5-.6.8-1c1.37-1.8 3.8-2.37 5.9-1.2 2.7 1.5 3.2 4.92 1.43 7.7C18.7 16.65 12 21 12 21z"/></svg>',
+  warning: '<svg class="icon" viewBox="0 0 24 24"><path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>',
+  check: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg>',
+  eliminated: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg>',
+  target: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>',
+};
+
+/** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
+const DEFAULT_CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
+
 /** Dernier état reçu, pour ne réagir qu'aux vraies transitions. */
 let previous = null;
 let overlayTimer = null;
+/** Signature de la dernière structure DOM construite pour #players, pour ne
+ *  reconstruire les nœuds que quand c'est réellement nécessaire. */
+let playersLayoutKey = null;
 
 // --------------------------------------------------------------- RENDU
 
@@ -45,18 +64,47 @@ function initials(name) {
   return (name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 
-function setPlayers(state) {
-  const players = state.players || [];
-  dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
+function renderTurn(state) {
+  const color = state.activePlayerColor || '#FF6D00';
+  dom.turnAvatar.style.background = color;
+  dom.turnAvatar.textContent = initials(state.activePlayerName);
+  dom.turnName.textContent = state.activePlayerName || '—';
+  dom.matchTitle.textContent = state.matchTitle || '';
+  dom.turnIndex.textContent = state.turnIndex ? `Tour ${state.turnIndex}` : '';
+}
 
-  // Réutilisation des cartes existantes plutôt qu'un remplacement complet :
-  // recréer le DOM à chaque fléchette relancerait toutes les animations et
-  // ferait clignoter l'écran.
-  while (dom.players.children.length > players.length) {
-    dom.players.removeChild(dom.players.lastChild);
+function renderDarts(state) {
+  const darts = state.currentDarts || [];
+  dom.dartsStrip.innerHTML = darts.map((dart) => {
+    const cls = dart.points === 0 ? 'miss' : (dart.points >= 40 ? 'big' : '');
+    return `<span class="dart ${cls}">${dart.label}</span>`;
+  }).join('');
+}
+
+function renderFooter(state) {
+  const hasCheckout = !!state.checkout;
+  dom.checkout.classList.toggle('hidden', !hasCheckout);
+  if (hasCheckout) {
+    dom.checkout.innerHTML = `${ICONS.target}<span class="label">Checkout ${state.activePlayerRemainingScore ?? ''} :</span><span class="value">${state.checkout}</span>`;
   }
-  while (dom.players.children.length < players.length) {
-    dom.players.appendChild(buildCard());
+
+  const hasBust = !!state.bustMessage;
+  dom.bust.classList.toggle('hidden', !hasBust);
+  if (hasBust) dom.bust.innerHTML = `${ICONS.warning}<span>${state.bustMessage}</span>`;
+}
+
+// ------------------------------------------------------- GRILLE X01 / KILLER
+
+function renderCardGrid(state) {
+  const players = state.players || [];
+  const layoutKey = `cards:${players.length > 6 ? 'many' : players.length}`;
+
+  if (playersLayoutKey !== layoutKey) {
+    dom.players.className = 'players';
+    dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
+    dom.players.innerHTML = '';
+    players.forEach(() => dom.players.appendChild(buildCard()));
+    playersLayoutKey = layoutKey;
   }
 
   players.forEach((player, index) => {
@@ -74,19 +122,30 @@ function buildCard() {
       <div style="min-width:0">
         <div class="name"></div>
         <div class="team-tag"></div>
+        <div class="target-pill hidden"></div>
       </div>
     </div>
-    <div class="body"></div>
+    <div class="foot" style="display:flex; align-items:flex-end; justify-content:space-between; gap:1vw;">
+      <div class="score"></div>
+    </div>
   `;
   return card;
 }
 
 function updateCard(card, player, state) {
+  const isKiller = state.mode === 'killer';
   card.style.setProperty('--player-color', player.color || '#FF6D00');
-  card.classList.toggle('active', !!player.isActive);
-  card.classList.toggle('eliminated', !!player.isEliminated);
 
-  card.querySelector('.flames').classList.toggle('hidden', !player.isKiller);
+  // En X01/duo l'accent suit le tour ; au Killer le statut (killer/éliminé)
+  // reste affiché même hors tour, exactement comme côté app.
+  card.classList.toggle('active', !!player.isActive && !isKiller);
+  card.classList.toggle('killer-status', isKiller && !!player.isKiller && !player.isEliminated);
+  card.classList.toggle('eliminated-status', isKiller && !!player.isEliminated);
+  if (isKiller && player.isActive && !player.isKiller && !player.isEliminated) {
+    card.classList.add('active');
+  }
+
+  card.querySelector('.flames').classList.toggle('hidden', !(isKiller && player.isKiller && !player.isEliminated));
 
   const avatar = card.querySelector('.avatar');
   avatar.style.background = player.color || '#FF6D00';
@@ -98,107 +157,150 @@ function updateCard(card, player, state) {
   tag.textContent = player.teamLabel || '';
   tag.style.display = player.teamLabel ? '' : 'none';
 
-  renderBody(card.querySelector('.body'), player, state);
-}
-
-function renderBody(body, player, state) {
-  if (state.mode === 'cricket') {
-    renderCricketBody(body, player, state);
-    return;
+  const pill = card.querySelector('.target-pill');
+  if (isKiller) {
+    pill.textContent = `N° ${player.targetNumber ?? '—'}`;
+    pill.classList.remove('hidden');
+  } else {
+    pill.classList.add('hidden');
   }
 
-  if (state.mode === 'killer') {
-    body.innerHTML = `
-      <div class="sub">Chiffre ${player.targetNumber ?? '—'}</div>
-      <div class="lives"></div>
-    `;
-    const lives = body.querySelector('.lives');
-    if (player.isEliminated) {
-      lives.innerHTML = '<span class="life">💀</span><span class="sub">éliminé</span>';
-    } else if (state.isCompetitive) {
-      lives.innerHTML = `<span class="life">❤️</span><span class="score" style="font-size:6vh">${player.lives ?? 0}</span>`;
-    } else {
-      const marks = player.touches ?? 0;
-      lives.innerHTML = player.isKiller
-        ? '<span class="life">🔥</span><span class="sub">KILLER</span>'
-        : `<span class="score" style="font-size:6vh">${'|'.repeat(marks) || '–'}</span>`;
+  const foot = card.querySelector('.foot');
+  let badge = foot.querySelector('.status-badge');
+
+  if (isKiller) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'status-badge';
+      foot.appendChild(badge);
     }
+    renderKillerBadge(badge, player, state);
+  } else if (badge) {
+    badge.remove();
+  }
+
+  const score = foot.querySelector('.score');
+  const next = String(player.score ?? 0);
+  if (score.textContent !== next) {
+    score.textContent = next;
+    replayAnimation(score, 'bump');
+  }
+  // Au Killer le score numérique de la carte n'a pas de sens (c'est le badge
+  // qui porte l'information) : on masque la cellule plutôt que d'afficher 0.
+  score.style.display = isKiller ? 'none' : '';
+}
+
+/** Reproduit KillerStatusBadge() : 4 variantes exactement comme côté app. */
+function renderKillerBadge(badge, player, state) {
+  if (player.isEliminated) {
+    badge.className = 'status-badge eliminated';
+    badge.innerHTML = `${ICONS.eliminated}<span>ÉLIMINÉ</span>`;
     return;
   }
 
-  // X01 : le score restant est l'information reine, tout le reste est secondaire.
-  const score = ensureScoreNode(body);
+  if (state.isCompetitive) {
+    badge.className = 'status-badge lives';
+    badge.innerHTML = `${ICONS.heart}<span>${player.lives ?? 0}</span>`;
+    return;
+  }
+
+  if (player.isKiller) {
+    badge.className = 'status-badge killer';
+    badge.innerHTML = `🔥<span>|||  KILLER</span>`;
+    return;
+  }
+
+  badge.className = 'status-badge touches';
+  const bars = { 0: '-', 1: '|', 2: '| |' }[player.touches] ?? '| | |';
+  badge.innerHTML = `<span>${bars}</span>`;
+}
+
+// --------------------------------------------------------------- CRICKET
+
+function renderCricketBoard(state) {
+  const players = state.players || [];
+  const targets = state.cricketTargets && state.cricketTargets.length
+    ? state.cricketTargets
+    : DEFAULT_CRICKET_TARGETS;
+  const layoutKey = `cricket:${players.map((p) => p.id).join(',')}`;
+
+  if (playersLayoutKey !== layoutKey) {
+    dom.players.className = 'players cricket-board';
+    delete dom.players.dataset.count;
+    dom.players.innerHTML = '';
+    dom.players.appendChild(buildCricketTargetColumn(targets));
+    players.forEach(() => dom.players.appendChild(buildCricketPlayerColumn(targets)));
+    playersLayoutKey = layoutKey;
+  }
+
+  const columns = dom.players.querySelectorAll('.cricket-player-col');
+  players.forEach((player, index) => {
+    updateCricketColumn(columns[index], player, targets, state);
+  });
+}
+
+function buildCricketTargetColumn(targets) {
+  const col = document.createElement('div');
+  col.className = 'cricket-col cricket-target-col';
+  col.innerHTML = `
+    <div class="cricket-target-head">
+      <div class="big">CIBLE</div>
+    </div>
+    ${targets.map((t) => `<div class="cricket-target-cell">${t === 25 ? 'BULL' : t}</div>`).join('')}
+  `;
+  return col;
+}
+
+function buildCricketPlayerColumn(targets) {
+  const col = document.createElement('div');
+  col.className = 'cricket-col cricket-player-col';
+  col.innerHTML = `
+    <div class="cricket-head">
+      <div class="row">
+        <div class="cricket-avatar"></div>
+        <div class="name"></div>
+      </div>
+      <div class="row">
+        <span class="team-tag"></span>
+        <span class="score"></span>
+      </div>
+    </div>
+    ${targets.map(() => '<div class="cricket-cell"></div>').join('')}
+  `;
+  return col;
+}
+
+function updateCricketColumn(col, player, targets, state) {
+  col.classList.toggle('active', !!player.isActive);
+
+  const avatar = col.querySelector('.cricket-avatar');
+  avatar.style.background = player.color || '#FF6D00';
+  avatar.textContent = initials(player.name);
+  col.querySelector('.name').textContent = player.name || '';
+
+  const tag = col.querySelector('.team-tag');
+  tag.textContent = player.teamLabel ? player.teamLabel.replace('Équipe', 'É') : '';
+
+  const score = col.querySelector('.cricket-head .score');
   const next = String(player.score ?? 0);
   if (score.textContent !== next) {
     score.textContent = next;
     replayAnimation(score, 'bump');
   }
-}
 
-function ensureScoreNode(body) {
-  let score = body.querySelector('.score');
-  if (!score) {
-    body.innerHTML = '';
-    score = document.createElement('div');
-    score.className = 'score';
-    body.appendChild(score);
-  }
-  return score;
-}
-
-function renderCricketBody(body, player, state) {
-  const targets = state.cricketTargets || [20, 19, 18, 17, 16, 15, 25];
-  let wrap = body.querySelector('.marks');
-  if (!wrap) {
-    body.innerHTML = '<div class="marks"></div><div class="score" style="font-size:6vh"></div>';
-    wrap = body.querySelector('.marks');
-  }
-
-  wrap.innerHTML = targets.map((target) => {
+  const cells = col.querySelectorAll('.cricket-cell');
+  targets.forEach((target, i) => {
     const hits = (player.marks && player.marks[target]) || 0;
-    const pips = [0, 1, 2].map((i) => `<span class="pip ${i < hits ? 'on' : ''}"></span>`).join('');
-    return `<div class="mark-row ${hits >= 3 ? 'closed' : ''}">
-        <span class="mark-label">${target === 25 ? 'BULL' : target}</span>
-        <span class="mark-pips">${pips}</span>
-      </div>`;
-  }).join('');
-
-  const score = body.querySelector('.score');
-  const next = String(player.score ?? 0);
-  if (score.textContent !== next) {
-    score.textContent = next;
-    replayAnimation(score, 'bump');
-  }
+    cells[i].innerHTML = cricketMarkSymbol(hits);
+  });
 }
 
-function renderDarts(state) {
-  const darts = state.currentDarts || [];
-  dom.dartsStrip.innerHTML = darts.map((dart) => {
-    const cls = dart.points === 0 ? 'miss' : (dart.points >= 40 ? 'big' : '');
-    return `<span class="dart ${cls}">${dart.label}</span>`;
-  }).join('');
-}
-
-function renderTurn(state) {
-  const color = state.activePlayerColor || '#FF6D00';
-  dom.turnBanner.style.setProperty('--player-color', color);
-  dom.turnAvatar.style.background = color;
-  dom.turnAvatar.textContent = initials(state.activePlayerName);
-  dom.turnName.textContent = state.activePlayerName || '—';
-  dom.matchTitle.textContent = state.matchTitle || '';
-  dom.turnIndex.textContent = state.turnIndex ? `Tour ${state.turnIndex}` : '';
-}
-
-function renderFooter(state) {
-  const hasCheckout = !!state.checkout;
-  dom.checkout.classList.toggle('hidden', !hasCheckout);
-  if (hasCheckout) {
-    dom.checkout.innerHTML = `<span class="label">Checkout</span><span>${state.checkout}</span>`;
-  }
-
-  const hasBust = !!state.bustMessage;
-  dom.bust.classList.toggle('hidden', !hasBust);
-  if (hasBust) dom.bust.textContent = state.bustMessage;
+/** Reproduit CricketMarkSymbol() : point / slash / X / pilule FERMÉ verte. */
+function cricketMarkSymbol(hits) {
+  if (hits >= 3) return `<span class="mark-closed">${ICONS.check}FERMÉ</span>`;
+  if (hits === 2) return '<span class="mark-x">X</span>';
+  if (hits === 1) return '<span class="mark-slash">/</span>';
+  return '<span class="mark-dot">•</span>';
 }
 
 // ------------------------------------------------------------- EFFETS
@@ -353,6 +455,7 @@ function render(state) {
     dom.idle.classList.remove('hidden');
     dom.game.classList.add('hidden');
     previous = null;
+    playersLayoutKey = null;
     return;
   }
 
@@ -361,7 +464,13 @@ function render(state) {
 
   renderTurn(state);
   renderDarts(state);
-  setPlayers(state);
+
+  if (state.mode === 'cricket') {
+    renderCricketBoard(state);
+  } else {
+    renderCardGrid(state);
+  }
+
   renderFooter(state);
   reactToChanges(state);
 
@@ -398,66 +507,110 @@ function startCast() {
 /**
  * Partie scriptée, jouée quand la page est ouverte dans un navigateur.
  *
- * Permet de valider tout le rendu et les effets sans Chromecast ni tablette,
- * et sert de documentation vivante du format de message attendu.
+ * Passe par les 3 jeux (301, Cricket, Killer) et par les 3 événements plein
+ * écran, pour valider tout le rendu sans Chromecast ni tablette.
  */
 function startDemo() {
-  const players = [
-    { id: 1, name: 'Adrien', color: '#7e57c2', score: 301 },
-    { id: 2, name: 'Laura', color: '#ec407a', score: 301 },
-    { id: 3, name: 'Stéphane', color: '#26a69a', score: 301 },
+  const P = [
+    { id: 1, name: 'Adrien', color: '#7e57c2' },
+    { id: 2, name: 'Laura', color: '#ec407a' },
+    { id: 3, name: 'Stéphane', color: '#26a69a' },
   ];
 
-  let turn = 1;
-  let activeIndex = 0;
-  let darts = [];
+  // Reconstruit tout l'état à chaque tour de boucle : les fermetures ci-dessous
+  // capturent des scores mutables, qui dériveraient indéfiniment (score négatif
+  // au bout de quelques tours) sans repartir d'un état neuf.
+  function buildScript() {
+  const script = [];
 
-  const snapshot = (extra = {}) => ({
-    type: 'state',
-    mode: 'x01',
-    matchTitle: '301',
-    turnIndex: turn,
-    activePlayerId: players[activeIndex].id,
-    activePlayerName: players[activeIndex].name,
-    activePlayerColor: players[activeIndex].color,
-    currentDarts: darts.slice(),
-    players: players.map((p, i) => ({ ...p, isActive: i === activeIndex })),
-    ...extra,
-  });
+  // ------------------------------------------------------------- 301
+  {
+    let scores = { 1: 301, 2: 301, 3: 301 };
+    let active = 0;
+    let darts = [];
+    let turn = 1;
+    const snap = (extra = {}) => ({
+      type: 'state', mode: 'x01', matchTitle: '301', turnIndex: turn,
+      activePlayerId: P[active].id, activePlayerName: P[active].name,
+      activePlayerColor: P[active].color, activePlayerRemainingScore: scores[P[active].id],
+      currentDarts: darts.slice(),
+      players: P.map((p, i) => ({ ...p, isActive: i === active, score: scores[p.id] })),
+      ...extra,
+    });
+    script.push(
+      () => { darts = [{ label: 'T20', points: 60 }]; scores[1] -= 60; render(snap()); },
+      () => { darts.push({ label: '20', points: 20 }); scores[1] -= 20; render(snap()); },
+      () => { darts.push({ label: 'RATÉ', points: 0 }); render(snap()); },
+      () => { active = 1; darts = []; render(snap()); },
+      () => { darts = [{ label: 'T19', points: 57 }]; scores[2] -= 57; render(snap()); },
+      () => { darts.push({ label: 'BULL', points: 50 }); scores[2] -= 50; render(snap()); },
+      () => { active = 2; darts = []; turn = 2; render(snap()); },
+      () => { render(snap({ bustMessage: 'Bust : score dépassé !' })); },
+      () => { active = 0; darts = []; render(snap({ checkout: 'T20 D20' })); },
+    );
+  }
 
-  render(snapshot());
+  // ---------------------------------------------------------- CRICKET
+  {
+    const targets = [20, 19, 18, 17, 16, 15, 25];
+    let marks = { 1: {}, 2: {}, 3: {} };
+    let scores = { 1: 0, 2: 0, 3: 0 };
+    let active = 0;
+    const snap = (extra = {}) => ({
+      type: 'state', mode: 'cricket', matchTitle: 'Cricket', turnIndex: 1,
+      cricketTargets: targets,
+      activePlayerId: P[active].id, activePlayerName: P[active].name,
+      activePlayerColor: P[active].color, currentDarts: [],
+      players: P.map((p, i) => ({ ...p, isActive: i === active, score: scores[p.id], marks: marks[p.id] })),
+      ...extra,
+    });
+    script.push(
+      () => { marks[1][20] = 1; render(snap()); },
+      () => { marks[1][20] = 2; render(snap()); },
+      () => { marks[1][20] = 3; render(snap()); },
+      () => { active = 1; render(snap()); },
+      () => { marks[2][19] = 1; marks[2][25] = 1; render(snap()); },
+      () => { active = 2; render(snap()); },
+      () => { marks[3][20] = 3; scores[3] += 20; render(snap()); },
+    );
+  }
 
-  const script = [
-    () => { darts = [{ label: 'T20', points: 60 }]; players[0].score -= 60; render(snapshot()); },
-    () => { darts.push({ label: '20', points: 20 }); players[0].score -= 20; render(snapshot()); },
-    () => { darts.push({ label: 'RATÉ', points: 0 }); render(snapshot()); },
-    () => { activeIndex = 1; darts = []; render(snapshot()); },
-    () => { darts = [{ label: 'T19', points: 57 }]; players[1].score -= 57; render(snapshot()); },
-    () => { darts.push({ label: 'BULL', points: 50 }); players[1].score -= 50; render(snapshot()); },
-    () => { activeIndex = 2; darts = []; turn = 2; render(snapshot()); },
-    () => { render(snapshot({ bustMessage: 'Bust : score dépassé !' })); },
-    () => { activeIndex = 0; darts = []; render(snapshot({ checkout: 'T20 D20' })); },
-    () => { render(snapshot({ event: { kind: 'becameKiller', player: 'Adrien' } })); },
-    () => { render(snapshot({ event: { kind: 'eliminated', player: 'Stéphane' } })); },
-    () => {
-      players[0].score = 0;
-      render(snapshot({ event: { kind: 'victory', player: 'Adrien', subtitle: 'Gloire au roi !' } }));
-    },
-  ];
+  // ----------------------------------------------------------- KILLER
+  {
+    let active = 0;
+    const killerState = {
+      1: { targetNumber: 7, touches: 0, isKiller: false, isEliminated: false },
+      2: { targetNumber: 14, touches: 0, isKiller: false, isEliminated: false },
+      3: { targetNumber: 3, touches: 0, isKiller: false, isEliminated: false },
+    };
+    const snap = (extra = {}) => ({
+      type: 'state', mode: 'killer', matchTitle: 'Killer', turnIndex: 1, isCompetitive: false,
+      activePlayerId: P[active].id, activePlayerName: P[active].name,
+      activePlayerColor: P[active].color, currentDarts: [],
+      players: P.map((p, i) => ({ ...p, isActive: i === active, ...killerState[p.id] })),
+      ...extra,
+    });
+    script.push(
+      () => { killerState[1].touches = 2; render(snap()); },
+      () => { killerState[1].touches = 3; killerState[1].isKiller = true; render(snap({ event: { kind: 'becameKiller', player: 'Adrien' } })); },
+      () => { active = 1; render(snap()); },
+      () => { killerState[3].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Stéphane' } })); },
+      () => { render(snap({ event: { kind: 'victory', player: 'Adrien', subtitle: 'Gloire au roi !' } })); },
+    );
+  }
 
+    return script;
+  }
+
+  let script = buildScript();
   let stepIndex = 0;
-  setInterval(() => {
-    // Remise à zéro en début de cycle : sans ça la boucle continuerait à
-    // décompter et afficherait des scores négatifs au bout de deux tours.
-    if (stepIndex % script.length === 0) {
-      players.forEach((p) => { p.score = 301; });
-      turn = 1;
-      activeIndex = 0;
-      darts = [];
-    }
+  const runStep = () => {
+    if (stepIndex > 0 && stepIndex % script.length === 0) script = buildScript();
     script[stepIndex % script.length]();
     stepIndex += 1;
-  }, 2600);
+  };
+  runStep();
+  setInterval(runStep, 2600);
 }
 
 // ------------------------------------------------------------ DÉMARRAGE
