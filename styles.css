@@ -5,12 +5,13 @@
   interprétation) : mêmes couleurs (Color.kt/Theme.kt), mêmes rayons de coin,
   mêmes règles d'opacité pour les états actif/éliminé/killer/fermé. Pas de halo
   ni de glow — Material3 est plat, l'app ne fait jamais flouter une bordure ou
-  un fond, dans aucun des deux thèmes.
+  un fond.
 
-  L'app suit le thème système par défaut (SambarreyDartTheme, Theme.kt) et bascule
-  clair/sombre en conséquence : cette page fait pareil via prefers-color-scheme,
-  avec le clair en valeur par défaut puisque c'est LightColorScheme qui est actif
-  tant que l'appareil n'est pas explicitement en sombre.
+  Palette LightColorScheme fixe, volontairement PAS de prefers-color-scheme :
+  cette page tourne dans le navigateur du Chromecast/de la télé, pas sur la
+  tablette — son thème système à lui n'a aucun rapport avec celui de l'app, et
+  le suivre a fait revenir du sombre non désiré. Le clair reste fixe tant que
+  ce n'est pas explicitement demandé.
 
   Contraintes propres à une télé : on regarde de loin -> typographie énorme ;
   les téléviseurs rognent les bords (overscan) -> marge de sécurité en vw/vh ;
@@ -34,18 +35,6 @@
   --faint: rgba(0, 0, 0, 0.05);   /* remplissage neutre très faible sur fond clair */
   --safe-x: 4vw;
   --safe-y: 4vh;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121214;          /* DarkBackground */
-    --surface: #1e1e24;     /* DarkSurface */
-    --surface-2: #2b2b36;   /* DarkSurfaceVariant */
-    --text: #f1f1f5;        /* OnDarkText */
-    --muted: #a0a0b2;       /* OnDarkSubtext */
-    --primary-container: #e65100; /* DartPrimaryVariant */
-    --faint: rgba(255, 255, 255, 0.04);
-  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
