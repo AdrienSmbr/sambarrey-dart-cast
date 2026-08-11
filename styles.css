@@ -1,0 +1,417 @@
+/*
+  Feuille de style du scoreboard distant.
+
+  Contraintes propres à une télé, qui expliquent la plupart des choix :
+   - on regarde de loin -> typographie énorme et contrastes forts ;
+   - les téléviseurs rognent les bords (overscan) -> marge de sécurité en vw/vh ;
+   - le Chromecast a un processeur modeste -> animations uniquement sur
+     `transform` et `opacity`, les seules propriétés que le compositeur GPU
+     traite sans repasser par la mise en page.
+*/
+
+:root {
+  --bg: #07080d;
+  --bg-glow: #141a2e;
+  --surface: #141826;
+  --surface-2: #1c2133;
+  --text: #f2f5ff;
+  --muted: #8b93ad;
+  --accent: #ffb300;
+  --danger: #ff4d4d;
+  --safe-x: 4vw;
+  --safe-y: 4vh;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  /* Halo d'ambiance, purement décoratif et statique : aucun coût par image. */
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(90vw 70vh at 50% -10%, var(--bg-glow) 0%, transparent 60%),
+    radial-gradient(60vw 50vh at 100% 110%, #1a1030 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.hidden { display: none !important; }
+
+/* `height: 100%` des enfants n'a de sens que si le conteneur a lui-même une
+   hauteur : sans cette règle, l'écran de jeu se dimensionnait sur son contenu
+   et laissait la moitié basse de la télé vide. */
+#app { height: 100%; }
+
+#fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* ---------------------------------------------------------------- ATTENTE */
+
+.idle {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.2vh;
+}
+
+.idle-board {
+  position: relative;
+  width: 22vh;
+  height: 22vh;
+  display: grid;
+  place-items: center;
+}
+
+.idle-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 0.5vh solid rgba(255, 179, 0, 0.35);
+  inset: 0;
+  animation: pulse 3.2s ease-in-out infinite;
+}
+.idle-ring:nth-child(2) { inset: 22%; animation-delay: 0.4s; }
+.idle-bull {
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 4vh rgba(255, 179, 0, 0.7);
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.idle-title {
+  font-size: 7vh;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.idle-sub { font-size: 2.6vh; color: var(--muted); }
+
+/* ------------------------------------------------------------------- JEU */
+
+.game {
+  height: 100%;
+  padding: var(--safe-y) var(--safe-x);
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+}
+
+.match { display: flex; flex-direction: column; min-width: 14vw; }
+.match-title { font-size: 4.4vh; font-weight: 900; line-height: 1; }
+.match-turn { font-size: 2vh; color: var(--muted); margin-top: 0.6vh; }
+
+/* Bandeau « au tour de » : le repère le plus important de l'écran. */
+.turn-banner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4vw;
+  padding: 1.4vh 2vw;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  border: 0.3vh solid var(--player-color, var(--accent));
+  box-shadow: 0 0 4vh -1vh var(--player-color, var(--accent));
+}
+
+.turn-avatar {
+  width: 6.4vh;
+  height: 6.4vh;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 3vh;
+  font-weight: 900;
+  background: var(--player-color, var(--accent));
+  color: #fff;
+  flex: none;
+}
+
+.turn-label {
+  font-size: 2.2vh;
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  color: var(--muted);
+}
+
+.turn-name {
+  font-size: 5vh;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* Le nom entre en glissant : c'est ce qui rend le changement de joueur lisible
+   d'un bout à l'autre de la pièce, même sans regarder l'écran en continu. */
+.turn-name.enter { animation: nameIn 520ms cubic-bezier(.16,1,.3,1); }
+@keyframes nameIn {
+  from { opacity: 0; transform: translateX(6vw) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
+.darts-strip { display: flex; gap: 0.8vw; min-width: 14vw; justify-content: flex-end; }
+
+.dart {
+  min-width: 6vh;
+  padding: 1vh 1.2vh;
+  border-radius: 1.2vh;
+  background: var(--surface-2);
+  font-size: 2.6vh;
+  font-weight: 800;
+  text-align: center;
+  animation: dartIn 260ms cubic-bezier(.16,1,.3,1);
+}
+.dart.miss { color: var(--muted); }
+.dart.big { background: var(--accent); color: #131313; }
+
+@keyframes dartIn {
+  from { opacity: 0; transform: translateY(-1.5vh) scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --------------------------------------------------------------- JOUEURS */
+
+.players {
+  flex: 1;
+  display: grid;
+  gap: 1.6vh 1.6vw;
+  align-content: stretch;
+  min-height: 0;
+  /* Sans ça les rangées implicites se dimensionnent sur leur contenu et les
+     cartes se tassent en haut de l'écran au lieu d'occuper la télé entière. */
+  grid-auto-rows: 1fr;
+}
+/* Le nombre de colonnes suit l'effectif : à deux joueurs on veut deux gros
+   panneaux, à six on veut une grille. */
+.players[data-count="1"], .players[data-count="2"] { grid-template-columns: repeat(2, 1fr); }
+.players[data-count="3"] { grid-template-columns: repeat(3, 1fr); }
+.players[data-count="4"] { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+.players[data-count="5"], .players[data-count="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+.players[data-count="many"] { grid-template-columns: repeat(4, 1fr); }
+
+.card {
+  position: relative;
+  border-radius: 2.4vh;
+  background: var(--surface);
+  border: 0.3vh solid transparent;
+  padding: 2.2vh 2vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  transition: transform 380ms cubic-bezier(.16,1,.3,1), border-color 380ms, background 380ms;
+}
+
+.card.active {
+  border-color: var(--player-color);
+  background: var(--surface-2);
+  transform: scale(1.03);
+  box-shadow: 0 0 6vh -2vh var(--player-color);
+}
+
+.card.eliminated { opacity: 0.45; filter: grayscale(0.7); }
+
+.card-head { display: flex; align-items: center; gap: 1vw; }
+
+.avatar {
+  width: 7vh;
+  height: 7vh;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 3.4vh;
+  font-weight: 900;
+  color: #fff;
+  flex: none;
+}
+
+.name {
+  font-size: 3.6vh;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-tag {
+  font-size: 1.8vh;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.score {
+  font-size: 12vh;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.card.active .score { color: var(--player-color); }
+
+/* Le score « encaisse » le coup quand il change : repère visuel immédiat. */
+.score.bump { animation: bump 420ms cubic-bezier(.16,1,.3,1); }
+@keyframes bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+.sub { font-size: 2vh; color: var(--muted); }
+
+/* Flammes du joueur killer : deux dégradés animés en `transform` seulement.
+   Volontairement pas une animation Lottie — sur un Chromecast, un brasier
+   vectoriel de plusieurs centaines de calques coûte bien plus cher que ça. */
+.flames {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -8%;
+  height: 40%;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side, rgba(255, 138, 0, 0.55), transparent 70%) 10% 100% / 30% 100% no-repeat,
+    radial-gradient(closest-side, rgba(255, 61, 0, 0.5), transparent 70%) 45% 100% / 34% 100% no-repeat,
+    radial-gradient(closest-side, rgba(255, 179, 0, 0.5), transparent 70%) 80% 100% / 30% 100% no-repeat;
+  animation: flicker 2.4s ease-in-out infinite;
+}
+@keyframes flicker {
+  0%, 100% { transform: scaleY(1) translateY(0); opacity: 0.85; }
+  50% { transform: scaleY(1.25) translateY(-4%); opacity: 1; }
+}
+
+/* Marques du Cricket */
+.marks { display: flex; flex-direction: column; gap: 0.5vh; }
+.mark-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6vw; }
+.mark-label { font-size: 2vh; font-weight: 700; color: var(--muted); width: 4vw; }
+.mark-pips { display: flex; gap: 0.4vw; }
+.pip {
+  width: 1.6vh; height: 1.6vh; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pip.on { background: var(--player-color); }
+.mark-row.closed .mark-label { color: var(--text); text-decoration: line-through; }
+
+/* Vies / touches du Killer */
+.lives { display: flex; gap: 0.6vw; align-items: center; }
+.life { font-size: 3.4vh; }
+
+/* ------------------------------------------------------------ BAS D'ÉCRAN */
+
+.bottombar { display: flex; gap: 1.6vw; min-height: 7vh; align-items: center; }
+
+.checkout {
+  flex: 1;
+  padding: 1.6vh 2vw;
+  border-radius: 1.6vh;
+  background: rgba(255, 179, 0, 0.14);
+  border: 0.25vh solid rgba(255, 179, 0, 0.5);
+  font-size: 3vh;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+}
+.checkout .label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.2em; font-size: 2vh; }
+
+.bust {
+  flex: 1;
+  padding: 1.6vh 2vw;
+  border-radius: 1.6vh;
+  background: rgba(255, 77, 77, 0.18);
+  border: 0.25vh solid var(--danger);
+  color: #ffd9d9;
+  font-size: 3vh;
+  font-weight: 800;
+  animation: shake 480ms;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-1.2vw); }
+  35% { transform: translateX(1vw); }
+  55% { transform: translateX(-0.6vw); }
+  80% { transform: translateX(0.4vw); }
+}
+
+/* Secousse de tout l'écran, réservée aux gros moments. */
+.quake { animation: shake 520ms; }
+
+/* ------------------------------------------------------------ BALAYAGE FX */
+
+.sweep {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.18) 50%, transparent 65%);
+  transform: translateX(-100%);
+}
+.sweep.run { animation: sweep 700ms ease-out; }
+@keyframes sweep {
+  0% { opacity: 1; transform: translateX(-100%); }
+  100% { opacity: 0; transform: translateX(100%); }
+}
+
+/* -------------------------------------------------------------- OVERLAYS */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 5, 10, 0.86);
+  animation: fadeIn 260ms ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.overlay-inner {
+  text-align: center;
+  animation: overlayPop 620ms cubic-bezier(.16,1,.3,1);
+}
+@keyframes overlayPop {
+  0% { opacity: 0; transform: scale(0.7) translateY(4vh); }
+  100% { opacity: 1; transform: none; }
+}
+
+.overlay-icon { font-size: 16vh; line-height: 1; }
+.overlay-title {
+  font-size: 5vh;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--overlay-color, var(--accent));
+  margin-top: 1vh;
+}
+.overlay-name { font-size: 11vh; font-weight: 900; line-height: 1.05; }
+.overlay-sub { font-size: 3vh; color: var(--muted); margin-top: 1vh; }

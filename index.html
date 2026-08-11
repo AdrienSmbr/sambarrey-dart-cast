@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SambarreyDart — Scoreboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Balayage lumineux joué à chaque changement de joueur. -->
+  <div id="sweep" class="sweep"></div>
+
+  <!-- Confettis et particules : un seul canvas plein écran, piloté en JS. -->
+  <canvas id="fx"></canvas>
+
+  <main id="app">
+    <!-- ÉCRAN D'ATTENTE, tant qu'aucune partie n'est reçue -->
+    <section id="idle" class="idle">
+      <div class="idle-board" aria-hidden="true">
+        <div class="idle-ring"></div>
+        <div class="idle-ring"></div>
+        <div class="idle-bull"></div>
+      </div>
+      <h1 class="idle-title">SambarreyDart</h1>
+      <p class="idle-sub">En attente d'une partie…</p>
+    </section>
+
+    <!-- PARTIE EN COURS -->
+    <section id="game" class="game hidden">
+      <header class="topbar">
+        <div class="match">
+          <span id="matchTitle" class="match-title">301</span>
+          <span id="turnIndex" class="match-turn">Tour 1</span>
+        </div>
+
+        <div id="turnBanner" class="turn-banner">
+          <span id="turnAvatar" class="turn-avatar">A</span>
+          <span class="turn-label">au tour de</span>
+          <span id="turnName" class="turn-name">—</span>
+        </div>
+
+        <div id="dartsStrip" class="darts-strip"></div>
+      </header>
+
+      <div id="players" class="players"></div>
+
+      <footer class="bottombar">
+        <div id="checkout" class="checkout hidden"></div>
+        <div id="bust" class="bust hidden"></div>
+      </footer>
+    </section>
+
+    <!-- SUPERPOSITIONS ÉVÉNEMENTIELLES (killer, élimination, victoire) -->
+    <div id="overlay" class="overlay hidden">
+      <div class="overlay-inner">
+        <div id="overlayIcon" class="overlay-icon">🔥</div>
+        <div id="overlayTitle" class="overlay-title">NOUVEAU KILLER</div>
+        <div id="overlayName" class="overlay-name">Adrien</div>
+        <div id="overlaySub" class="overlay-sub"></div>
+      </div>
+    </div>
+  </main>
+
+  <!--
+    SDK Cast. Seule dépendance externe de la page : elle est imposée par la
+    plateforme, tout le reste (rendu, animations, particules) est fait maison
+    pour ne rien coûter au Chromecast, dont le processeur est modeste.
+    Absent en navigateur : le mode démo prend alors le relais.
+  -->
+  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script src="receiver.js"></script>
+</body>
+</html>
