@@ -31,6 +31,7 @@ const dom = {
   checkout: el('checkout'),
   bust: el('bust'),
   overlay: el('overlay'),
+  overlayLottie: el('overlayLottie'),
   overlayIcon: el('overlayIcon'),
   overlayTitle: el('overlayTitle'),
   overlayName: el('overlayName'),
@@ -46,7 +47,18 @@ const ICONS = {
   check: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 20.6 7.4 19.2 6z"/></svg>',
   eliminated: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg>',
   target: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>',
+  // Reprend Icons.Default.LocalFireDepartment (badge "isKiller" côté app).
+  fire: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 2c1 3-1 4.5-2.5 6C9 9.9 8 11.7 8 14a5.5 5.5 0 0 0 5.7 5.5c-.6-.7-1-1.5-1-2.5 0-1.3.9-2.1 1.9-3 .8-.7 1.65-1.45 2-2.5.7 1 1.2 2.1 1.2 3.5 0 2.5-1.9 4.5-4.3 5-1.9.4-3.9-.2-5.3-1.6C6.7 16.9 6 15.1 6 13.2 6 9.6 8.3 7 10.3 5 11.6 3.7 12.7 2.9 13.5 2z"/></svg>',
+  // Reprend Icons.Default.EmojiEvents (icône victoire).
+  trophy: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 5h-2V3H7v2H5a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4c.5 1.9 2 3.4 4 3.85V18H8v2h8v-2h-3v-2.15c2-.45 3.5-1.95 4-3.85a4 4 0 0 0 4-4V7a2 2 0 0 0-2-2zM5 8V7h2v2.8A2 2 0 0 1 5 8zm14 0a2 2 0 0 1-2 1.8V7h2v1z"/></svg>',
 };
+
+/** Animations plein écran « nouveau killer » / « élimination », reprises telles
+ *  quelles de app/src/main/res/raw (KillerScoreboard.kt tire au hasard dans la
+ *  même liste à chaque déclenchement). */
+const KILLER_LOTTIES = ['assets/lottie/dragon_fire.lottie', 'assets/lottie/fire_card.lottie'];
+const ELIMINATED_LOTTIES = ['assets/lottie/dead_emoji.lottie', 'assets/lottie/mediation_skull.lottie', 'assets/lottie/rip_dead.lottie'];
+const pickRandom = (arr) => arr[(Math.random() * arr.length) | 0];
 
 /** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
 const DEFAULT_CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
@@ -97,11 +109,19 @@ function renderFooter(state) {
 
 function renderCardGrid(state) {
   const players = state.players || [];
-  const layoutKey = `cards:${players.length > 6 ? 'many' : players.length}`;
+  const isKiller = state.mode === 'killer';
+  // Killer : côté app c'est une liste de lignes compactes (une Row par joueur),
+  // pas une grille de cartes carrées — les faire vivre dans la même grille que
+  // le 301 les étirait sur toute la hauteur de la colonne pour rien.
+  const layoutKey = isKiller ? `cards:killer:${players.length}` : `cards:${players.length > 6 ? 'many' : players.length}`;
 
   if (playersLayoutKey !== layoutKey) {
-    dom.players.className = 'players';
-    dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
+    dom.players.className = isKiller ? 'players killer-list' : 'players';
+    if (isKiller) {
+      delete dom.players.dataset.count;
+    } else {
+      dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
+    }
     dom.players.innerHTML = '';
     players.forEach(() => dom.players.appendChild(buildCard()));
     playersLayoutKey = layoutKey;
@@ -136,6 +156,11 @@ function updateCard(card, player, state) {
   const isKiller = state.mode === 'killer';
   card.style.setProperty('--player-color', player.color || '#FF6D00');
 
+  // Côté app la carte Killer est une seule ligne (pas de score séparé) : on
+  // retrouve cette proportion plutôt que de garder une carte aussi haute que
+  // celles du 301 avec une ligne de score vide en dessous.
+  card.classList.toggle('mode-killer', isKiller);
+
   // En X01/duo l'accent suit le tour ; au Killer le statut (killer/éliminé)
   // reste affiché même hors tour, exactement comme côté app.
   card.classList.toggle('active', !!player.isActive && !isKiller);
@@ -159,7 +184,7 @@ function updateCard(card, player, state) {
 
   const pill = card.querySelector('.target-pill');
   if (isKiller) {
-    pill.textContent = `N° ${player.targetNumber ?? '—'}`;
+    pill.innerHTML = `<span class="killer-target-label">Cible</span><span class="killer-target-num">${player.targetNumber ?? '—'}</span>`;
     pill.classList.remove('hidden');
   } else {
     pill.classList.add('hidden');
@@ -206,7 +231,7 @@ function renderKillerBadge(badge, player, state) {
 
   if (player.isKiller) {
     badge.className = 'status-badge killer';
-    badge.innerHTML = `🔥<span>|||  KILLER</span>`;
+    badge.innerHTML = `${ICONS.fire}<span>|||  KILLER</span>`;
     return;
   }
 
@@ -321,9 +346,20 @@ function quake() {
   replayAnimation(dom.app, 'quake');
 }
 
-function showOverlay({ icon, title, name, sub, color, duration = 3200 }) {
+function showOverlay({ lottie, icon, title, name, sub, color, duration = 3200 }) {
   clearTimeout(overlayTimer);
-  dom.overlayIcon.textContent = icon;
+
+  if (lottie) {
+    dom.overlayLottie.setAttribute('src', lottie);
+    dom.overlayLottie.classList.remove('hidden');
+    dom.overlayIcon.classList.add('hidden');
+  } else {
+    dom.overlayLottie.classList.add('hidden');
+    dom.overlayLottie.removeAttribute('src');
+    dom.overlayIcon.innerHTML = icon || '';
+    dom.overlayIcon.classList.remove('hidden');
+  }
+
   dom.overlayTitle.textContent = title;
   dom.overlayName.textContent = name || '';
   dom.overlaySub.textContent = sub || '';
@@ -356,19 +392,19 @@ function reactToChanges(state) {
 function handleEvent(event) {
   switch (event.kind) {
     case 'becameKiller':
-      showOverlay({ icon: '🔥', title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
+      showOverlay({ lottie: pickRandom(KILLER_LOTTIES), title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
       confetti({ colors: ['#FF6D00', '#FFC107', '#FF1744'], count: 90, spread: 'up' });
       quake();
       break;
 
     case 'eliminated':
-      showOverlay({ icon: '💀', title: 'Élimination', name: event.player, color: '#FF1744' });
+      showOverlay({ lottie: pickRandom(ELIMINATED_LOTTIES), title: 'Élimination', name: event.player, color: '#FF1744' });
       quake();
       break;
 
     case 'victory':
       showOverlay({
-        icon: '🏆',
+        icon: ICONS.trophy,
         title: 'Victoire',
         name: event.player,
         sub: event.subtitle || '',

@@ -52,8 +52,9 @@
 
     <!-- SUPERPOSITIONS ÉVÉNEMENTIELLES (killer, élimination, victoire) -->
     <div id="overlay" class="overlay hidden">
+      <dotlottie-wc id="overlayLottie" class="overlay-lottie hidden" loop autoplay></dotlottie-wc>
       <div class="overlay-inner">
-        <div id="overlayIcon" class="overlay-icon">🔥</div>
+        <div id="overlayIcon" class="overlay-icon"></div>
         <div id="overlayTitle" class="overlay-title">NOUVEAU KILLER</div>
         <div id="overlayName" class="overlay-name">Adrien</div>
         <div id="overlaySub" class="overlay-sub"></div>
@@ -62,12 +63,15 @@
   </main>
 
   <!--
-    SDK Cast. Seule dépendance externe de la page : elle est imposée par la
-    plateforme, tout le reste (rendu, animations, particules) est fait maison
-    pour ne rien coûter au Chromecast, dont le processeur est modeste.
-    Absent en navigateur : le mode démo prend alors le relais.
+    Dépendances externes de la page : le SDK Cast est imposé par la plateforme ;
+    dotlottie-wc (version figée) joue les .lottie du jeu (assets/lottie/) telles
+    quelles, pour que « nouveau killer » et « élimination » restent les mêmes
+    animations que sur la tablette plutôt qu'un emoji statique. Le reste (rendu,
+    particules) est fait maison pour ne rien coûter au Chromecast. Le SDK Cast
+    est absent en navigateur : le mode démo prend alors le relais.
   -->
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-wc@0.9.25/dist/dotlottie-wc.js"></script>
   <script src="receiver.js"></script>
 </body>
 </html>

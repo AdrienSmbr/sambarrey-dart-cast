@@ -4,8 +4,13 @@
   Reprend EXACTEMENT la grammaire visuelle des écrans Compose de l'app (pas une
   interprétation) : mêmes couleurs (Color.kt/Theme.kt), mêmes rayons de coin,
   mêmes règles d'opacité pour les états actif/éliminé/killer/fermé. Pas de halo
-  ni de glow — Material3 en mode sombre est plat, l'app ne fait jamais flouter
-  une bordure ou un fond.
+  ni de glow — Material3 est plat, l'app ne fait jamais flouter une bordure ou
+  un fond, dans aucun des deux thèmes.
+
+  L'app suit le thème système par défaut (SambarreyDartTheme, Theme.kt) et bascule
+  clair/sombre en conséquence : cette page fait pareil via prefers-color-scheme,
+  avec le clair en valeur par défaut puisque c'est LightColorScheme qui est actif
+  tant que l'appareil n'est pas explicitement en sombre.
 
   Contraintes propres à une télé : on regarde de loin -> typographie énorme ;
   les téléviseurs rognent les bords (overscan) -> marge de sécurité en vw/vh ;
@@ -15,19 +20,32 @@
 */
 
 :root {
-  --bg: #121214;          /* DarkBackground */
-  --surface: #1e1e24;     /* DarkSurface */
-  --surface-2: #2b2b36;   /* DarkSurfaceVariant */
-  --text: #f1f1f5;        /* OnDarkText */
-  --muted: #a0a0b2;       /* OnDarkSubtext */
+  --bg: #f0f2f5;          /* LightBackground */
+  --surface: #ffffff;     /* LightSurface */
+  --surface-2: #e2e7ed;   /* LightSurfaceVariant */
+  --text: #111827;        /* OnLightText */
+  --muted: #4b5563;       /* OnLightSubtext */
   --primary: #ff6d00;     /* DartPrimary — orange */
-  --primary-container: #e65100; /* DartPrimaryVariant, utilisé comme fond teinté */
+  --primary-container: #ffe0b2; /* primaryContainer clair (Theme.kt), utilisé comme fond teinté */
   --secondary: #00c853;   /* DartSecondary — vert */
   --tertiary: #2979ff;    /* DartAccent — bleu électrique */
   --danger: #ff1744;      /* RedBust / error */
   --gold: #ffc107;        /* GoldWinner */
+  --faint: rgba(0, 0, 0, 0.05);   /* remplissage neutre très faible sur fond clair */
   --safe-x: 4vw;
   --safe-y: 4vh;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121214;          /* DarkBackground */
+    --surface: #1e1e24;     /* DarkSurface */
+    --surface-2: #2b2b36;   /* DarkSurfaceVariant */
+    --text: #f1f1f5;        /* OnDarkText */
+    --muted: #a0a0b2;       /* OnDarkSubtext */
+    --primary-container: #e65100; /* DartPrimaryVariant */
+    --faint: rgba(255, 255, 255, 0.04);
+  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -209,7 +227,7 @@ html, body {
 .players {
   flex: 1;
   display: grid;
-  gap: 1.4vh 1.4vw;
+  gap: 1.1vh 1.1vw;
   align-content: stretch;
   min-height: 0;
   grid-auto-rows: 1fr;
@@ -220,6 +238,17 @@ html, body {
 .players[data-count="5"], .players[data-count="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
 .players[data-count="many"] { grid-template-columns: repeat(4, 1fr); }
 
+/* Killer : liste verticale de lignes compactes plutôt qu'une grille de cartes
+   carrées — chaque carte ne prend que la hauteur de son contenu, centrée dans
+   l'espace disponible, comme la Column de KillerScoreboardView côté app. */
+.players.killer-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.6vh;
+}
+.players.killer-list .card { flex: none; }
+
 /*
   Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp (X01/team) ou 2dp
   (killer) selon l'app, fond surfaceVariant au repos, primaryContainer(alpha)
@@ -227,16 +256,28 @@ html, body {
 */
 .card {
   position: relative;
-  border-radius: 2.2vh;
+  border-radius: 1.8vh;
   background: var(--surface-2);
   border: 0.3vh solid transparent;
-  padding: 1.8vh 1.8vw;
+  padding: 1.3vh 1.5vw;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
   transition: border-color 260ms, background-color 260ms;
 }
+
+/* Killer : l'app affiche la carte en une seule ligne (avatar+nom+cible à
+   gauche, badge de statut à droite), pas de score séparé en dessous — on
+   reprend cette proportion plutôt que de garder une ligne de score vide. */
+.card.mode-killer {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1vw;
+}
+.card.mode-killer .card-head { flex: 1; min-width: 0; }
+.card.mode-killer .foot { flex: none; }
 
 .card.active {
   border-color: var(--player-color, var(--primary));
@@ -256,19 +297,19 @@ html, body {
 .card-head { display: flex; align-items: center; gap: 1vw; }
 
 .avatar {
-  width: 6vh;
-  height: 6vh;
+  width: 5vh;
+  height: 5vh;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 2.8vh;
+  font-size: 2.3vh;
   font-weight: 700;
   color: #fff;
   flex: none;
 }
 
 .name {
-  font-size: 3.2vh;
+  font-size: 2.6vh;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -284,7 +325,7 @@ html, body {
 }
 
 .score {
-  font-size: 10vh;
+  font-size: 8.2vh;
   font-weight: 800;
   line-height: 0.9;
   letter-spacing: -0.03em;
@@ -302,17 +343,33 @@ html, body {
 
 .sub { font-size: 1.9vh; color: var(--muted); }
 
-/* Pilule "N° X" du Killer : primary(alpha .2), rayon 8dp -> 1.1vh. */
+/* Pilule "N° X" du Killer (primary(alpha .2), rayon 8dp -> 1.1vh côté app),
+   éclatée en label + grand chiffre : la carte étant maintenant une ligne
+   compacte, la cible peut se permettre d'être le repère visuel dominant
+   plutôt qu'un texte discret sous le nom. */
 .target-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.7vh;
   align-self: flex-start;
-  margin-top: 0.6vh;
-  padding: 0.3vh 1.2vh;
+  margin-top: 0.5vh;
+  padding: 0.5vh 1.3vh;
   border-radius: 1.1vh;
   background: rgba(255, 109, 0, 0.2);
-  color: var(--primary);
-  font-size: 2.6vh;
+}
+.target-pill .killer-target-label {
+  font-size: 1.4vh;
   font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  text-transform: uppercase;
+}
+.target-pill .killer-target-num {
+  font-size: 3.4vh;
+  font-weight: 900;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 /* Flammes du joueur killer : dégradés animés en `transform`/`opacity`
@@ -343,21 +400,21 @@ html, body {
   (flamme + barres), et le compte de touches par défaut en barres | | |.
 */
 .status-badge {
-  align-self: flex-end;
+  align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 0.6vh;
-  padding: 0.8vh 1.4vh;
+  gap: 0.8vh;
+  padding: 1vh 1.7vh;
   border-radius: 1.6vh;
-  font-size: 2.2vh;
+  font-size: 2.8vh;
   font-weight: 800;
 }
 .status-badge.touches { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
 .status-badge.lives { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
 .status-badge.lives .icon { color: var(--danger); }
 .status-badge.killer { background: var(--primary); color: #fff; }
-.status-badge.eliminated { background: rgba(255, 23, 68, 0.2); color: var(--danger); font-size: 1.9vh; }
-.status-badge .icon { width: 2.2vh; height: 2.2vh; flex: none; }
+.status-badge.eliminated { background: rgba(255, 23, 68, 0.2); color: var(--danger); font-size: 2.3vh; }
+.status-badge .icon { width: 2.8vh; height: 2.8vh; flex: none; }
 
 /* ------------------------------------------------------------- CRICKET */
 
@@ -434,7 +491,7 @@ html, body {
 
 .cricket-cell {
   border-radius: 1vh;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--faint);
   display: grid;
   place-items: center;
 }
@@ -559,7 +616,19 @@ html, body {
   100% { opacity: 1; transform: none; }
 }
 
+/* Anime dragon_fire/fire_card (killer) ou dead_emoji/mediation_skull/rip_dead
+   (élimination) — mêmes fichiers .lottie que côté app. Centré au-dessus du
+   texte plutôt qu'en plein cadre derrière : le composant web n'expose le
+   recadrage "cover" que via une API JS non stabilisée, et un texte par-dessus
+   une animation illustrative non recadrée devient illisible. */
+.overlay-lottie {
+  width: 30vh;
+  height: 30vh;
+  margin: 0 auto;
+}
+
 .overlay-icon { font-size: 14vh; line-height: 1; }
+.overlay-icon .icon { width: 12vh; height: 12vh; color: #fff; }
 .overlay-title {
   font-size: 4.6vh;
   font-weight: 900;
