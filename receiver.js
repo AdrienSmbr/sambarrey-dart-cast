@@ -82,14 +82,14 @@ function buildCard() {
 }
 
 function updateCard(card, player, state) {
-  card.style.setProperty('--player-color', player.color || '#ffb300');
+  card.style.setProperty('--player-color', player.color || '#FF6D00');
   card.classList.toggle('active', !!player.isActive);
   card.classList.toggle('eliminated', !!player.isEliminated);
 
   card.querySelector('.flames').classList.toggle('hidden', !player.isKiller);
 
   const avatar = card.querySelector('.avatar');
-  avatar.style.background = player.color || '#ffb300';
+  avatar.style.background = player.color || '#FF6D00';
   avatar.textContent = initials(player.name);
 
   card.querySelector('.name').textContent = player.name || '';
@@ -180,7 +180,7 @@ function renderDarts(state) {
 }
 
 function renderTurn(state) {
-  const color = state.activePlayerColor || '#ffb300';
+  const color = state.activePlayerColor || '#FF6D00';
   dom.turnBanner.style.setProperty('--player-color', color);
   dom.turnAvatar.style.background = color;
   dom.turnAvatar.textContent = initials(state.activePlayerName);
@@ -225,7 +225,7 @@ function showOverlay({ icon, title, name, sub, color, duration = 3200 }) {
   dom.overlayTitle.textContent = title;
   dom.overlayName.textContent = name || '';
   dom.overlaySub.textContent = sub || '';
-  dom.overlay.style.setProperty('--overlay-color', color || '#ffb300');
+  dom.overlay.style.setProperty('--overlay-color', color || '#FF6D00');
   dom.overlay.classList.remove('hidden');
   replayAnimation(dom.overlay.querySelector('.overlay-inner'), 'pop');
 
@@ -254,13 +254,13 @@ function reactToChanges(state) {
 function handleEvent(event) {
   switch (event.kind) {
     case 'becameKiller':
-      showOverlay({ icon: '🔥', title: 'Nouveau killer', name: event.player, color: '#ff6d00' });
-      confetti({ colors: ['#ff6d00', '#ffb300', '#ff3d00'], count: 90, spread: 'up' });
+      showOverlay({ icon: '🔥', title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
+      confetti({ colors: ['#FF6D00', '#FFC107', '#FF1744'], count: 90, spread: 'up' });
       quake();
       break;
 
     case 'eliminated':
-      showOverlay({ icon: '💀', title: 'Élimination', name: event.player, color: '#ff4d4d' });
+      showOverlay({ icon: '💀', title: 'Élimination', name: event.player, color: '#FF1744' });
       quake();
       break;
 
@@ -270,7 +270,7 @@ function handleEvent(event) {
         title: 'Victoire',
         name: event.player,
         sub: event.subtitle || '',
-        color: '#ffd54f',
+        color: '#FFC107',
         duration: 12000,
       });
       confetti({ count: 320, duration: 7000 });
@@ -296,7 +296,7 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 function confetti({ count = 200, colors = null, duration = 5000, spread = 'top' } = {}) {
-  const palette = colors || ['#ffb300', '#ff4d4d', '#4dd0e1', '#81c784', '#ba68c8', '#fff'];
+  const palette = colors || ['#FF6D00', '#00C853', '#2979FF', '#FFC107', '#FF1744', '#fff'];
   const now = performance.now();
 
   for (let i = 0; i < count; i += 1) {

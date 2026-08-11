@@ -9,15 +9,23 @@
      traite sans repasser par la mise en page.
 */
 
+/*
+  Palette alignée sur celle de l'app (Color.kt / Theme.kt, palette sombre) :
+  même orange, même vert, même bleu, même gris de fond. La télé doit se
+  reconnaître comme le même produit que la tablette, pas comme un site à part.
+*/
 :root {
-  --bg: #07080d;
-  --bg-glow: #141a2e;
-  --surface: #141826;
-  --surface-2: #1c2133;
-  --text: #f2f5ff;
-  --muted: #8b93ad;
-  --accent: #ffb300;
-  --danger: #ff4d4d;
+  --bg: #121214;          /* DarkBackground */
+  --surface: #1e1e24;     /* DarkSurface */
+  --surface-2: #2b2b36;   /* DarkSurfaceVariant */
+  --text: #f1f1f5;        /* OnDarkText */
+  --muted: #a0a0b2;       /* OnDarkSubtext */
+  --primary: #ff6d00;     /* DartPrimary — orange */
+  --secondary: #00c853;   /* DartSecondary — vert, cible du checkout */
+  --tertiary: #2979ff;    /* DartAccent — bleu électrique */
+  --danger: #ff1744;      /* RedBust */
+  --gold: #ffc107;        /* GoldWinner */
+  --accent: var(--primary);
   --safe-x: 4vw;
   --safe-y: 4vh;
 }
@@ -40,8 +48,8 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(90vw 70vh at 50% -10%, var(--bg-glow) 0%, transparent 60%),
-    radial-gradient(60vw 50vh at 100% 110%, #1a1030 0%, transparent 60%);
+    radial-gradient(90vw 70vh at 50% -10%, rgba(255, 109, 0, 0.10) 0%, transparent 60%),
+    radial-gradient(60vw 50vh at 100% 110%, rgba(41, 121, 255, 0.10) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -81,7 +89,7 @@ body::before {
 .idle-ring {
   position: absolute;
   border-radius: 50%;
-  border: 0.5vh solid rgba(255, 179, 0, 0.35);
+  border: 0.5vh solid rgba(255, 109, 0, 0.35);
   inset: 0;
   animation: pulse 3.2s ease-in-out infinite;
 }
@@ -90,8 +98,8 @@ body::before {
   width: 18%;
   height: 18%;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 4vh rgba(255, 179, 0, 0.7);
+  background: var(--primary);
+  box-shadow: 0 0 4vh rgba(255, 109, 0, 0.7);
 }
 
 @keyframes pulse {
@@ -136,8 +144,8 @@ body::before {
   padding: 1.4vh 2vw;
   border-radius: 99px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
-  border: 0.3vh solid var(--player-color, var(--accent));
-  box-shadow: 0 0 4vh -1vh var(--player-color, var(--accent));
+  border: 0.3vh solid var(--player-color, var(--primary));
+  box-shadow: 0 0 4vh -1vh var(--player-color, var(--primary));
 }
 
 .turn-avatar {
@@ -148,7 +156,7 @@ body::before {
   place-items: center;
   font-size: 3vh;
   font-weight: 900;
-  background: var(--player-color, var(--accent));
+  background: var(--player-color, var(--primary));
   color: #fff;
   flex: none;
 }
@@ -188,7 +196,7 @@ body::before {
   animation: dartIn 260ms cubic-bezier(.16,1,.3,1);
 }
 .dart.miss { color: var(--muted); }
-.dart.big { background: var(--accent); color: #131313; }
+.dart.big { background: var(--primary); color: #131313; }
 
 @keyframes dartIn {
   from { opacity: 0; transform: translateY(-1.5vh) scale(0.8); }
@@ -332,15 +340,17 @@ body::before {
   flex: 1;
   padding: 1.6vh 2vw;
   border-radius: 1.6vh;
-  background: rgba(255, 179, 0, 0.14);
-  border: 0.25vh solid rgba(255, 179, 0, 0.5);
+  /* Vert et non orange : c'est la couleur exacte du bandeau de checkout côté
+     tablette (CheckoutBanner.kt utilise déjà colorScheme.secondary). */
+  background: rgba(0, 200, 83, 0.14);
+  border: 0.25vh solid rgba(0, 200, 83, 0.5);
   font-size: 3vh;
   font-weight: 800;
   display: flex;
   align-items: center;
   gap: 1vw;
 }
-.checkout .label { color: var(--accent); text-transform: uppercase; letter-spacing: 0.2em; font-size: 2vh; }
+.checkout .label { color: var(--secondary); text-transform: uppercase; letter-spacing: 0.2em; font-size: 2vh; }
 
 .bust {
   flex: 1;
