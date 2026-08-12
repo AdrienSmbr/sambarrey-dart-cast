@@ -1,0 +1,214 @@
+/*
+  Reprend la palette claire de l'app (Color.kt/Theme.kt, LightColorScheme) et
+  la mise en page de Podium.kt : carte champion en dégradé or, dauphins en
+  cartes réduites, reste du classement en lignes sobres. Pensé pour un
+  téléphone en portrait — contrairement au receiver Chromecast, cette page
+  n'a pas de contrainte de recul TV.
+*/
+
+:root {
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --surface-2: #e2e7ed;
+  --text: #111827;
+  --muted: #4b5563;
+  --primary: #ff6d00;
+
+  --gold-tint: #f2b705;
+  --gold-deep: #8a6100;
+  --silver-tint: #9fa8b2;
+  --silver-deep: #5a626b;
+  --bronze-tint: #c1783c;
+  --bronze-deep: #74441e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hidden { display: none !important; }
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.topbar h1 { font-size: 26px; font-weight: 900; }
+.updated { font-size: 13px; color: var(--muted); }
+
+.state {
+  text-align: center;
+  color: var(--muted);
+  padding: 60px 16px;
+  font-size: 15px;
+}
+
+.podium { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+
+/* ------------------------------------------------------------- CHAMPION */
+
+.champion-frame {
+  border-radius: 22px;
+  padding: 2px;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold-tint), var(--gold-deep));
+}
+.champion-card {
+  border-radius: 20px;
+  background: var(--surface);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.champion-card .medal-avatar { --medal-tint: var(--gold-tint); }
+.champion-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.champion-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--gold-tint);
+}
+.medal-icon { width: 1.4em; height: 1.4em; flex: none; }
+.runner-kicker .medal-icon { width: 1.2em; height: 1.2em; }
+.champion-name {
+  font-size: 30px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--chip-color, var(--primary)) 14%, transparent);
+}
+.chip .value { font-weight: 800; font-size: 15px; }
+.chip .label { font-size: 12px; color: var(--muted); }
+
+/* ------------------------------------------------------------- DAUPHINS */
+
+.runners { display: flex; gap: 12px; }
+.runner-card {
+  flex: 1;
+  min-width: 0;
+  border-radius: 18px;
+  background: var(--surface-2);
+  padding: 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.runner-card.silver .medal-avatar { --medal-tint: var(--silver-tint); }
+.runner-card.bronze .medal-avatar { --medal-tint: var(--bronze-tint); }
+.runner-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.runner-kicker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.runner-card.silver .runner-kicker { color: var(--silver-tint); }
+.runner-card.bronze .runner-kicker { color: var(--bronze-tint); }
+.runner-name {
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runner-sub { font-size: 12px; color: var(--muted); }
+
+/* ------------------------------------------------------- AVATAR À MÉDAILLE */
+
+.medal-avatar {
+  --medal-tint: var(--primary);
+  position: relative;
+  flex: none;
+}
+.medal-ring {
+  border-radius: 50%;
+  border: 4px solid var(--medal-tint);
+  display: grid;
+  place-items: center;
+}
+.champion-card .medal-ring { width: 96px; height: 96px; }
+.runner-card .medal-ring { width: 52px; height: 52px; border-width: 3px; }
+
+.avatar {
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+}
+.champion-card .avatar { width: 84px; height: 84px; font-size: 34px; }
+.runner-card .avatar { width: 44px; height: 44px; font-size: 18px; }
+
+.medal-pill {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  background: var(--medal-tint);
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+}
+
+/* ------------------------------------------------------------------ RESTE */
+
+.rest { display: flex; flex-direction: column; gap: 8px; }
+.rest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+}
+.rest-position { width: 22px; font-weight: 700; color: var(--muted); text-align: center; flex: none; }
+.rest-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  flex: none;
+}
+.rest-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rest-sub { font-size: 13px; color: var(--muted); flex: none; }

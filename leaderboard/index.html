@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SambarreyDart — Classement</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <h1>Classement</h1>
+      <p id="updatedAt" class="updated hidden"></p>
+    </header>
+
+    <section id="loading" class="state">
+      <p>Chargement du classement…</p>
+    </section>
+
+    <section id="empty" class="state hidden">
+      <p>Pas encore de partie terminée.</p>
+    </section>
+
+    <section id="board" class="hidden">
+      <div id="podium" class="podium"></div>
+      <div id="rest" class="rest"></div>
+    </section>
+  </main>
+
+  <!--
+    SDK Firebase (modulaire, v12) chargé directement depuis gstatic — page
+    statique, aucune dépendance à builder : la config (firebase-config.js)
+    est le seul fichier à remplacer une fois le vrai projet Firebase créé.
+  -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
