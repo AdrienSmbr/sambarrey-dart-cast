@@ -42,19 +42,101 @@ html, body {
 
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
-.topbar h1 { font-size: 26px; font-weight: 900; }
-.updated { font-size: 13px; color: var(--muted); }
+/* Masthead sobre : un kicker fin au-dessus d'un titre plus affirmé, plutôt
+   qu'un simple <h1> — "de la prestance" sans ajouter d'image. */
+.kicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+.topbar h1 {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.updated { font-size: 13px; color: var(--muted); padding-bottom: 3px; }
 
 .state {
   text-align: center;
   color: var(--muted);
   padding: 60px 16px;
   font-size: 15px;
+}
+
+/* Loader : même bullseye qui pulse que l'écran d'attente du receiver
+   Chromecast — cohérent avec le reste de l'identité, pas un simple spinner. */
+.loader-board {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 20px;
+  display: grid;
+  place-items: center;
+}
+.loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  animation: loaderPulse 3.2s ease-in-out infinite;
+}
+.loader-ring:nth-child(2) { inset: 22%; animation-delay: 0.4s; }
+.loader-bull { width: 18%; height: 18%; border-radius: 50%; background: var(--primary); }
+@keyframes loaderPulse {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* Blague perso sous le podium — discrète, pas un vrai message d'état. */
+.joke {
+  text-align: center;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  margin: -8px 0 20px;
+  padding: 0 12px;
+}
+
+/* --------------------------------------------------------------- ACCUEIL */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+  padding: 24px;
+}
+.welcome-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.welcome-card {
+  position: relative;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 32px 28px;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--text) 25%, transparent);
+}
+.welcome-card h2 { font-size: 22px; font-weight: 900; margin: 6px 0 10px; }
+.welcome-card p:not(.kicker) { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+.welcome-close {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 28px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .podium { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }

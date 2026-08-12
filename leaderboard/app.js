@@ -27,9 +27,30 @@ const dom = {
   empty: el('empty'),
   board: el('board'),
   podium: el('podium'),
+  jokeLine: el('jokeLine'),
   rest: el('rest'),
   updatedAt: el('updatedAt'),
+  welcome: el('welcome'),
+  welcomeClose: el('welcomeClose'),
 };
+
+/** Joué une fois par visite, à la première réception d'un classement réel. */
+let welcomeShown = false;
+
+function showWelcome() {
+  if (welcomeShown) return;
+  welcomeShown = true;
+  dom.welcome.classList.remove('hidden');
+}
+
+function hideWelcome() {
+  dom.welcome.classList.add('hidden');
+}
+
+dom.welcomeClose.addEventListener('click', hideWelcome);
+dom.welcome.addEventListener('click', (e) => {
+  if (e.target === dom.welcome) hideWelcome();
+});
 
 function initials(name) {
   return (name || '?').trim().charAt(0).toUpperCase() || '?';
@@ -125,6 +146,9 @@ function render(data) {
     dom.podium.appendChild(row);
   }
 
+  // Blague perso : n'a de sens que quand ce n'est pas Adrien en tête.
+  dom.jokeLine.classList.toggle('hidden', (champion.name || '').trim().toLowerCase() === 'adrien');
+
   players.slice(3).forEach((p, i) => dom.rest.appendChild(renderRestRow(p, i + 4)));
 
   if (data.updatedAt) {
@@ -133,6 +157,7 @@ function render(data) {
   }
 
   showState('board');
+  showWelcome();
 }
 
 function formatRelativeTime(timestamp) {

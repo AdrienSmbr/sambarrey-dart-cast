@@ -9,11 +9,19 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <h1>Classement</h1>
+      <div>
+        <p class="kicker">SAMBARREY DART</p>
+        <h1>Classement</h1>
+      </div>
       <p id="updatedAt" class="updated hidden"></p>
     </header>
 
     <section id="loading" class="state">
+      <div class="loader-board" aria-hidden="true">
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-bull"></div>
+      </div>
       <p>Chargement du classement…</p>
     </section>
 
@@ -23,15 +31,30 @@
 
     <section id="board" class="hidden">
       <div id="podium" class="podium"></div>
+      <p id="jokeLine" class="joke hidden">Si je ne suis pas premier, c'est qu'un hacker a eu accès à la BDD et a modifié les stats.</p>
       <div id="rest" class="rest"></div>
     </section>
   </main>
+
+  <!-- Accueil joué une fois par visite, à la première réception du classement. -->
+  <div id="welcome" class="overlay hidden">
+    <dotlottie-wc id="welcomeConfetti" class="welcome-confetti" src="assets/lottie/confetti.lottie" loop autoplay></dotlottie-wc>
+    <div class="welcome-card">
+      <p class="kicker">SAMBARREY DART</p>
+      <h2>Bienvenue sur le classement !</h2>
+      <p>Suivez qui domine la maison, en direct.</p>
+      <button id="welcomeClose" class="welcome-close">C'est parti</button>
+    </div>
+  </div>
 
   <!--
     SDK Firebase (modulaire, v12) chargé directement depuis gstatic — page
     statique, aucune dépendance à builder : la config (firebase-config.js)
     est le seul fichier à remplacer une fois le vrai projet Firebase créé.
+    dotlottie-wc (version figée) joue confetti.lottie à l'accueil, le même
+    fichier que la vraie app utilise pour sa victoire.
   -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-wc@0.9.25/dist/dotlottie-wc.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
