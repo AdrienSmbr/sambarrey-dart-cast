@@ -227,16 +227,18 @@ html, body {
 .players[data-count="5"], .players[data-count="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
 .players[data-count="many"] { grid-template-columns: repeat(4, 1fr); }
 
-/* Killer : liste verticale de lignes compactes plutôt qu'une grille de cartes
-   carrées — chaque carte ne prend que la hauteur de son contenu, centrée dans
-   l'espace disponible, comme la Column de KillerScoreboardView côté app. */
+/* Killer : liste de lignes compactes plutôt qu'une grille de cartes carrées —
+   chaque carte ne prend que la hauteur de son contenu, centrée dans l'espace
+   disponible, comme la Column de KillerScoreboardView côté app. Sur deux
+   colonnes dès qu'on joue nombreux, sinon dix lignes ne tiennent pas. */
 .players.killer-list {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1.6vh;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: min-content;
+  align-content: center;
+  gap: 1.2vh 1.2vw;
 }
-.players.killer-list .card { flex: none; }
+.players.killer-list[data-count="many"] { grid-template-columns: repeat(2, 1fr); }
 
 /*
   Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp (X01/team) ou 2dp
@@ -305,14 +307,6 @@ html, body {
   white-space: nowrap;
 }
 
-.team-tag {
-  font-size: 1.6vh;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-
 .score {
   font-size: 8.2vh;
   font-weight: 800;
@@ -361,27 +355,92 @@ html, body {
   line-height: 1;
 }
 
-/* Flammes du joueur killer : dégradés animés en `transform`/`opacity`
-   uniquement, jamais de Lottie ici — sur un Chromecast, un brasier vectoriel
-   de centaines de calques coûte largement plus cher qu'un dégradé CSS. */
-.flames {
+/*
+  Animation de fond d'une carte : les mêmes fichiers que l'app, au même endroit.
+  `fire_card` couvre toute la carte du killer (comme le LottieAnimation en
+  matchParentSize côté Compose) ; `ghost` reste petit et posé à droite, à
+  l'image du fantôme qui erre sur la carte d'un éliminé.
+*/
+.card-anim {
   position: absolute;
-  left: -10%;
-  right: -10%;
-  bottom: -8%;
-  height: 42%;
   pointer-events: none;
-  opacity: 0.55;
-  background:
-    radial-gradient(closest-side, rgba(255, 138, 0, 0.6), transparent 70%) 10% 100% / 30% 100% no-repeat,
-    radial-gradient(closest-side, rgba(255, 61, 0, 0.55), transparent 70%) 45% 100% / 34% 100% no-repeat,
-    radial-gradient(closest-side, rgba(255, 179, 0, 0.55), transparent 70%) 80% 100% / 30% 100% no-repeat;
-  animation: flicker 2.4s ease-in-out infinite;
+  z-index: 0;
 }
-@keyframes flicker {
-  0%, 100% { transform: scaleY(1) translateY(0); opacity: 0.45; }
-  50% { transform: scaleY(1.22) translateY(-4%); opacity: 0.6; }
+.card-anim.fire {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.7;   /* même alpha que côté app */
 }
+/* Le fantôme reste petit et flotte entre le nom et le badge : la ligne Killer
+   est compacte, le poser à droite le ferait chevaucher le « ÉLIMINÉ ». */
+.card-anim.ghost {
+  top: 50%;
+  left: 50%;
+  width: 9vh;
+  height: 9vh;
+  transform: translate(-50%, -50%);
+  opacity: 0.75;
+}
+
+/* Le contenu de la carte passe au-dessus de son animation de fond. */
+.card > .card-head,
+.card > .members,
+.card > .foot { position: relative; z-index: 1; }
+
+/*
+  Duo : la carte porte une équipe. Le nom d'équipe prend l'accent `primary`
+  (l'app fait pareil : une équipe n'appartient à aucun joueur, donc pas de
+  couleur perso), et les coéquipiers défilent dessous, le lanceur en gras.
+*/
+/* Les coéquipiers se collent sous le nom d'équipe ; seul le score est repoussé
+   en bas, sinon `space-between` étalerait les trois blocs à égale distance. */
+.card.team-card { justify-content: flex-start; }
+.card.team-card .foot { margin-top: auto; }
+
+.card.team-card .name {
+  color: var(--primary);
+  font-size: 2.2vh;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 900;
+}
+
+.members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6vw 1vw;
+  margin-top: 0.8vh;
+}
+
+.member { display: inline-flex; align-items: center; gap: 0.5vw; min-width: 0; }
+
+.member-avatar {
+  width: 3.4vh;
+  height: 3.4vh;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.6vh;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+}
+.member-avatar.mini { width: 2.6vh; height: 2.6vh; font-size: 1.3vh; }
+
+.member-name {
+  font-size: 2vh;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Celui qui a les fléchettes en main ressort, comme dans TeamScoreCard. */
+.member.throwing .member-name { color: var(--primary); font-weight: 800; }
+.member-avatar.throwing { outline: 0.3vh solid var(--primary); outline-offset: 0.2vh; }
+
+.cricket-members { gap: 0.4vw; }
 
 /*
   Badge de statut Killer (bas-droite de la carte), 4 variantes exactement
@@ -476,7 +535,6 @@ html, body {
 }
 .cricket-head .score { font-size: 2.6vh; font-weight: 800; color: var(--text); }
 .cricket-col.active .cricket-head .score { color: var(--primary); }
-.cricket-head .team-tag { font-size: 1.3vh; color: var(--tertiary); font-weight: 800; }
 
 .cricket-cell {
   border-radius: 1vh;

@@ -53,11 +53,22 @@ const ICONS = {
   trophy: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 5h-2V3H7v2H5a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4c.5 1.9 2 3.4 4 3.85V18H8v2h8v-2h-3v-2.15c2-.45 3.5-1.95 4-3.85a4 4 0 0 0 4-4V7a2 2 0 0 0-2-2zM5 8V7h2v2.8A2 2 0 0 1 5 8zm14 0a2 2 0 0 1-2 1.8V7h2v1z"/></svg>',
 };
 
-/** Animations plein écran « nouveau killer » / « élimination », reprises telles
- *  quelles de app/src/main/res/raw (KillerScoreboard.kt tire au hasard dans la
- *  même liste à chaque déclenchement). */
-const KILLER_LOTTIES = ['assets/lottie/dragon_fire.lottie', 'assets/lottie/fire_card.lottie'];
-const ELIMINATED_LOTTIES = ['assets/lottie/dead_emoji.lottie', 'assets/lottie/mediation_skull.lottie', 'assets/lottie/rip_dead.lottie'];
+/**
+ * Animations reprises telles quelles de app/src/main/res/raw.
+ *
+ * Chaque fichier a une place et une seule, exactement comme côté app :
+ * `fire_card` est la signature de la carte d'un killer, `ghost` celle d'un
+ * éliminé, et aucun des deux n'apparaît ailleurs — surtout pas dans les
+ * annonces plein écran, qui ont leurs propres animations.
+ */
+const CARD_LOTTIE_KILLER = 'assets/lottie/fire_card.lottie';
+const CARD_LOTTIE_ELIMINATED = 'assets/lottie/ghost.lottie';
+const OVERLAY_LOTTIE_KILLER = 'assets/lottie/dragon_fire.lottie';
+const OVERLAY_LOTTIES_ELIMINATED = [
+  'assets/lottie/dead_emoji.lottie',
+  'assets/lottie/mediation_skull.lottie',
+  'assets/lottie/rip_dead.lottie',
+];
 const pickRandom = (arr) => arr[(Math.random() * arr.length) | 0];
 
 /** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
@@ -112,16 +123,16 @@ function renderCardGrid(state) {
   const isKiller = state.mode === 'killer';
   // Killer : côté app c'est une liste de lignes compactes (une Row par joueur),
   // pas une grille de cartes carrées — les faire vivre dans la même grille que
-  // le 301 les étirait sur toute la hauteur de la colonne pour rien.
-  const layoutKey = isKiller ? `cards:killer:${players.length}` : `cards:${players.length > 6 ? 'many' : players.length}`;
+  // le 301 les étirait sur toute la hauteur de la colonne pour rien. Au-delà de
+  // cinq joueurs la liste passe sur deux colonnes, sinon elle déborde de l'écran.
+  const count = isKiller
+    ? (players.length > 5 ? 'many' : 'few')
+    : (players.length > 6 ? 'many' : String(players.length));
+  const layoutKey = `cards:${isKiller ? 'killer' : 'grid'}:${count}:${players.length}`;
 
   if (playersLayoutKey !== layoutKey) {
     dom.players.className = isKiller ? 'players killer-list' : 'players';
-    if (isKiller) {
-      delete dom.players.dataset.count;
-    } else {
-      dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
-    }
+    dom.players.dataset.count = count;
     dom.players.innerHTML = '';
     players.forEach(() => dom.players.appendChild(buildCard()));
     playersLayoutKey = layoutKey;
@@ -136,15 +147,14 @@ function buildCard() {
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    <div class="flames hidden"></div>
     <div class="card-head">
       <div class="avatar"></div>
       <div style="min-width:0">
         <div class="name"></div>
-        <div class="team-tag"></div>
         <div class="target-pill hidden"></div>
       </div>
     </div>
+    <div class="members hidden"></div>
     <div class="foot" style="display:flex; align-items:flex-end; justify-content:space-between; gap:1vw;">
       <div class="score"></div>
     </div>
@@ -170,17 +180,38 @@ function updateCard(card, player, state) {
     card.classList.add('active');
   }
 
-  card.querySelector('.flames').classList.toggle('hidden', !(isKiller && player.isKiller && !player.isEliminated));
+  // Mêmes animations de carte que côté app : les flammes pour le killer, le
+  // fantôme pour l'éliminé. Rien pour les autres.
+  let cardLottie = null;
+  if (isKiller && player.isEliminated) cardLottie = CARD_LOTTIE_ELIMINATED;
+  else if (isKiller && player.isKiller) cardLottie = CARD_LOTTIE_KILLER;
+  setCardAnimation(card, cardLottie);
+
+  // En duo la carte porte une équipe : pas d'avatar unique en tête, mais la
+  // liste des coéquipiers dessous, celui qui lance étant mis en avant — c'est
+  // la composition de TeamScoreCard côté app.
+  const members = Array.isArray(player.members) ? player.members : null;
+  card.classList.toggle('team-card', !!members);
 
   const avatar = card.querySelector('.avatar');
-  avatar.style.background = player.color || '#FF6D00';
-  avatar.textContent = initials(player.name);
+  avatar.style.display = members ? 'none' : '';
+  if (!members) {
+    avatar.style.background = player.color || '#FF6D00';
+    avatar.textContent = initials(player.name);
+  }
 
   card.querySelector('.name').textContent = player.name || '';
 
-  const tag = card.querySelector('.team-tag');
-  tag.textContent = player.teamLabel || '';
-  tag.style.display = player.teamLabel ? '' : 'none';
+  const memberBox = card.querySelector('.members');
+  memberBox.classList.toggle('hidden', !members);
+  if (members) {
+    memberBox.innerHTML = members.map((member) => `
+      <span class="member${member.isThrowing ? ' throwing' : ''}">
+        <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
+        <span class="member-name">${member.name || ''}</span>
+      </span>
+    `).join('');
+  }
 
   const pill = card.querySelector('.target-pill');
   if (isKiller) {
@@ -213,6 +244,32 @@ function updateCard(card, player, state) {
   // Au Killer le score numérique de la carte n'a pas de sens (c'est le badge
   // qui porte l'information) : on masque la cellule plutôt que d'afficher 0.
   score.style.display = isKiller ? 'none' : '';
+}
+
+/**
+ * Place (ou retire) l'animation de fond d'une carte.
+ *
+ * Le lecteur .lottie est un composant lourd : on ne le recrée que si la source
+ * change réellement, sinon un simple rafraîchissement de score relancerait
+ * l'animation depuis zéro à chaque fléchette.
+ */
+function setCardAnimation(card, src) {
+  const current = card.querySelector('.card-anim');
+
+  if (!src) {
+    if (current) current.remove();
+    return;
+  }
+  if (current && current.dataset.src === src) return;
+  if (current) current.remove();
+
+  const anim = document.createElement('dotlottie-wc');
+  anim.className = src === CARD_LOTTIE_ELIMINATED ? 'card-anim ghost' : 'card-anim fire';
+  anim.dataset.src = src;
+  anim.setAttribute('src', src);
+  anim.setAttribute('loop', '');
+  anim.setAttribute('autoplay', '');
+  card.insertBefore(anim, card.firstChild);
 }
 
 /** Reproduit KillerStatusBadge() : 4 variantes exactement comme côté app. */
@@ -285,8 +342,8 @@ function buildCricketPlayerColumn(targets) {
         <div class="cricket-avatar"></div>
         <div class="name"></div>
       </div>
+      <div class="row cricket-members hidden"></div>
       <div class="row">
-        <span class="team-tag"></span>
         <span class="score"></span>
       </div>
     </div>
@@ -298,13 +355,25 @@ function buildCricketPlayerColumn(targets) {
 function updateCricketColumn(col, player, targets, state) {
   col.classList.toggle('active', !!player.isActive);
 
+  // Même logique qu'en X01 duo : une colonne par équipe, les coéquipiers en
+  // pastilles sous le nom plutôt qu'un avatar unique.
+  const members = Array.isArray(player.members) ? player.members : null;
+
   const avatar = col.querySelector('.cricket-avatar');
-  avatar.style.background = player.color || '#FF6D00';
-  avatar.textContent = initials(player.name);
+  avatar.style.display = members ? 'none' : '';
+  if (!members) {
+    avatar.style.background = player.color || '#FF6D00';
+    avatar.textContent = initials(player.name);
+  }
   col.querySelector('.name').textContent = player.name || '';
 
-  const tag = col.querySelector('.team-tag');
-  tag.textContent = player.teamLabel ? player.teamLabel.replace('Équipe', 'É') : '';
+  const memberBox = col.querySelector('.cricket-members');
+  memberBox.classList.toggle('hidden', !members);
+  if (members) {
+    memberBox.innerHTML = members.map((member) => `
+      <span class="member-avatar mini${member.isThrowing ? ' throwing' : ''}" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
+    `).join('');
+  }
 
   const score = col.querySelector('.cricket-head .score');
   const next = String(player.score ?? 0);
@@ -392,13 +461,13 @@ function reactToChanges(state) {
 function handleEvent(event) {
   switch (event.kind) {
     case 'becameKiller':
-      showOverlay({ lottie: pickRandom(KILLER_LOTTIES), title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
+      showOverlay({ lottie: OVERLAY_LOTTIE_KILLER, title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
       confetti({ colors: ['#FF6D00', '#FFC107', '#FF1744'], count: 90, spread: 'up' });
       quake();
       break;
 
     case 'eliminated':
-      showOverlay({ lottie: pickRandom(ELIMINATED_LOTTIES), title: 'Élimination', name: event.player, color: '#FF1744' });
+      showOverlay({ lottie: pickRandom(OVERLAY_LOTTIES_ELIMINATED), title: 'Élimination', name: event.player, color: '#FF1744' });
       quake();
       break;
 
@@ -553,6 +622,21 @@ function startDemo() {
     { id: 3, name: 'Stéphane', color: '#26a69a' },
   ];
 
+  // Table pleine : sert aux séquences duo et Killer compétitif, où l'enjeu est
+  // justement de voir ce que donne l'écran quand on joue nombreux.
+  const BIG = [
+    { id: 1, name: 'Adrien', color: '#7e57c2' },
+    { id: 2, name: 'Laura', color: '#ec407a' },
+    { id: 3, name: 'Stéphane', color: '#26a69a' },
+    { id: 4, name: 'Stéphanie', color: '#42a5f5' },
+    { id: 5, name: 'Julien', color: '#ffa726' },
+    { id: 6, name: 'Camille', color: '#ab47bc' },
+    { id: 7, name: 'Nicolas', color: '#66bb6a' },
+    { id: 8, name: 'Élodie', color: '#ef5350' },
+    { id: 9, name: 'Thomas', color: '#5c6bc0' },
+    { id: 10, name: 'Marine', color: '#26c6da' },
+  ];
+
   // Reconstruit tout l'état à chaque tour de boucle : les fermetures ci-dessous
   // capturent des scores mutables, qui dériveraient indéfiniment (score négatif
   // au bout de quelques tours) sans repartir d'un état neuf.
@@ -632,6 +716,95 @@ function startDemo() {
       () => { active = 1; render(snap()); },
       () => { killerState[3].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Stéphane' } })); },
       () => { render(snap({ event: { kind: 'victory', player: 'Adrien', subtitle: 'Gloire au roi !' } })); },
+    );
+  }
+
+  // -------------------------------------------------- 501 DUO (8 joueurs)
+  // Une carte par ÉQUIPE, pas par joueur : les coéquipiers partagent un seul
+  // score, et seul celui qui a les fléchettes est mis en avant.
+  {
+    const roster = BIG.slice(0, 8);
+    const teamOf = (index) => Math.floor(index / 2) + 1;
+    const teams = [1, 2, 3, 4];
+    const scores = { 1: 501, 2: 501, 3: 501, 4: 501 };
+    let thrower = 0;
+    let darts = [];
+
+    const snap = (extra = {}) => {
+      const active = teamOf(thrower);
+      return {
+        type: 'state', mode: 'x01', matchTitle: '501 duo', turnIndex: 1,
+        // Le bandeau nomme la personne qui lance, la carte porte l'équipe.
+        activePlayerId: roster[thrower].id,
+        activePlayerName: roster[thrower].name,
+        activePlayerColor: roster[thrower].color,
+        activePlayerRemainingScore: scores[active],
+        currentDarts: darts.slice(),
+        players: teams.map((team) => ({
+          id: -team,
+          name: `Équipe ${team}`,
+          color: '#FF6D00',
+          isActive: team === active,
+          score: scores[team],
+          members: roster
+            .filter((_, index) => teamOf(index) === team)
+            .map((member) => ({
+              id: member.id,
+              name: member.name,
+              color: member.color,
+              isThrowing: member.id === roster[thrower].id,
+            })),
+        })),
+        ...extra,
+      };
+    };
+
+    script.push(
+      () => { darts = [{ label: 'T20', points: 60 }]; scores[1] -= 60; render(snap()); },
+      () => { darts.push({ label: 'T19', points: 57 }); scores[1] -= 57; render(snap()); },
+      () => { thrower = 2; darts = []; render(snap()); },
+      () => { darts = [{ label: 'BULL', points: 50 }]; scores[2] -= 50; render(snap()); },
+      () => { thrower = 4; darts = []; render(snap()); },
+      () => { darts = [{ label: 'D20', points: 40 }]; scores[3] -= 40; render(snap()); },
+      // Au tour suivant c'est le COÉQUIPIER de l'équipe 1 qui lance : même
+      // score, autre lanceur — c'est tout l'intérêt du duo.
+      () => { thrower = 1; darts = []; render(snap()); },
+      () => { darts = [{ label: 'T20', points: 60 }]; scores[1] -= 60; render(snap()); },
+    );
+  }
+
+  // ------------------------------------- KILLER COMPÉTITIF (10 joueurs)
+  // Ici pas de statut de tueur : chacun a des vies, et on joue jusqu'au
+  // dernier debout. Le badge passe donc en cœurs.
+  {
+    const roster = BIG;
+    const lives = {};
+    roster.forEach((p, i) => { lives[p.id] = { targetNumber: (i * 2) + 1, touches: 5, isEliminated: false }; });
+    let active = 0;
+
+    const snap = (extra = {}) => ({
+      type: 'state', mode: 'killer', matchTitle: 'Killer compétitif', turnIndex: 3,
+      isCompetitive: true,
+      activePlayerId: roster[active].id,
+      activePlayerName: roster[active].name,
+      activePlayerColor: roster[active].color,
+      currentDarts: [],
+      players: roster.map((p, i) => ({
+        ...p,
+        isActive: i === active,
+        lives: lives[p.id].touches,
+        ...lives[p.id],
+      })),
+      ...extra,
+    });
+
+    script.push(
+      () => { lives[4].touches = 3; lives[7].touches = 2; render(snap()); },
+      () => { active = 3; lives[9].touches = 1; render(snap()); },
+      () => { active = 6; lives[9].touches = 0; lives[9].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Thomas' } })); },
+      () => { active = 0; lives[8].touches = 1; render(snap()); },
+      () => { lives[8].touches = 0; lives[8].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Élodie' } })); },
+      () => { render(snap()); },
     );
   }
 
