@@ -227,23 +227,28 @@ html, body {
 .players[data-count="5"], .players[data-count="6"] { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
 .players[data-count="many"] { grid-template-columns: repeat(4, 1fr); }
 
-/* Killer : liste de lignes compactes plutôt qu'une grille de cartes carrées —
-   chaque carte ne prend que la hauteur de son contenu, centrée dans l'espace
-   disponible, comme la Column de KillerScoreboardView côté app. Sur deux
-   colonnes dès qu'on joue nombreux, sinon dix lignes ne tiennent pas. */
-.players.killer-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-auto-rows: min-content;
-  align-content: center;
-  gap: 1.2vh 1.2vw;
-}
-.players.killer-list[data-count="many"] { grid-template-columns: repeat(2, 1fr); }
+/*
+  Moins de joueurs = plus de place par carte, donc tout doit grossir avec —
+  avatar, nom, score, badge — pas juste le vide autour. `--card-scale` est
+  posé ici sur le conteneur et hérité par toutes les cartes (Killer compris :
+  même grille, même form-factor que le X01), qui l'appliquent en calc() sur
+  leurs tailles (cf. .avatar/.name/.score/.status-badge…).
+*/
+.players[data-count="1"],
+.players[data-count="2"] { --card-scale: 1.35; }
+.players[data-count="3"] { --card-scale: 1.18; }
+.players[data-count="4"] { --card-scale: 1; }
+.players[data-count="5"],
+.players[data-count="6"] { --card-scale: 0.88; }
+.players[data-count="many"] { --card-scale: 0.74; }
 
 /*
-  Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp (X01/team) ou 2dp
-  (killer) selon l'app, fond surfaceVariant au repos, primaryContainer(alpha)
-  quand active. Aucune ombre, aucun flou.
+  Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp au repos, fond
+  surfaceVariant, primaryContainer(alpha) quand active. Aucune ombre, aucun
+  flou. La bordure colorée ne dit qu'une chose — "c'est son tour" — quel que
+  soit le mode ; le statut killer/éliminé se lit uniquement sur le badge et
+  le fond, jamais sur la bordure, sinon on ne sait plus laquelle des deux
+  choses on regarde.
 */
 .card {
   position: relative;
@@ -253,66 +258,93 @@ html, body {
   padding: 1.3vh 1.5vw;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   overflow: hidden;
   transition: border-color 260ms, background-color 260ms;
 }
-
-/* Killer : l'app affiche la carte en une seule ligne (avatar+nom+cible à
-   gauche, badge de statut à droite), pas de score séparé en dessous — on
-   reprend cette proportion plutôt que de garder une ligne de score vide. */
-.card.mode-killer {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1vw;
-}
-.card.mode-killer .card-head { flex: 1; min-width: 0; }
-.card.mode-killer .foot { flex: none; }
 
 .card.active {
   border-color: var(--player-color, var(--primary));
   background: color-mix(in srgb, var(--player-color, var(--primary)) 22%, var(--surface));
 }
 
-/* Killer : fond/bordure fixes hors tour actif (l'app les garde même sans être
-   le joueur en train de lancer, contrairement au X01). */
-.card.killer-status { background: rgba(255, 109, 0, 0.18); border-color: rgba(255, 109, 0, 0.6); }
+/* Killer : fond teinté fixe hors tour actif (l'app le garde même sans être
+   le joueur en train de lancer, contrairement au X01) — pas de bordure ici,
+   elle reste réservée au tour. */
+.card.killer-status { background: rgba(255, 109, 0, 0.16); }
+
+/* Signature visuelle du killer : avant un lecteur .lottie (canvas/WASM) en
+   boucle permanente, bien trop lourd pour un Chromecast d'entrée de gamme.
+   Une simple pulsation d'opacité sur un dégradé fixe donne le même effet de
+   "carte qui brûle" pour un coût compositeur quasi nul (transform/opacity
+   seulement, aucun repaint par frame). */
+.card.killer-status::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 25% 60%, rgba(255, 109, 0, 0.45), transparent 70%);
+  animation: killerGlow 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes killerGlow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+/* Éliminé : bordure et carte grisées, jamais colorées — la couleur reste
+   le langage exclusif du "c'est son tour", le gris celui du "hors jeu". */
 .card.eliminated-status {
-  background: rgba(255, 23, 68, 0.14);
-  border-color: rgba(255, 23, 68, 0.4);
-  filter: grayscale(0.35);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  filter: grayscale(0.6);
+  opacity: 0.75;
 }
 .card.eliminated-status .name { color: var(--muted); }
 
 .card-head { display: flex; align-items: center; gap: 1vw; }
 
 .avatar {
-  width: 5vh;
-  height: 5vh;
+  width: calc(5.6vh * var(--card-scale, 1));
+  height: calc(5.6vh * var(--card-scale, 1));
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 2.3vh;
+  font-size: calc(2.6vh * var(--card-scale, 1));
   font-weight: 700;
   color: #fff;
   flex: none;
 }
 
 .name {
-  font-size: 2.6vh;
+  font-size: calc(3.3vh * var(--card-scale, 1));
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/*
+  Cœur de la carte : la place qui reste sous le nom (et les coéquipiers en
+  duo) est remplie par UN gros repère central — le score en X01, le chiffre
+  cible en Killer — au lieu de rester vide avec juste un chiffre planqué en
+  bas de carte. C'est la même idée que le score géant du 301 : un seul
+  élément domine, tout le reste n'est que contexte.
+*/
+.card-center {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4vh;
+}
+
 .score {
-  font-size: 8.2vh;
+  font-size: calc(10.5vh * var(--card-scale, 1));
   font-weight: 800;
   line-height: 0.9;
   letter-spacing: -0.03em;
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .card.active .score { color: var(--player-color, var(--primary)); }
@@ -324,68 +356,36 @@ html, body {
   100% { transform: scale(1); }
 }
 
-.sub { font-size: 1.9vh; color: var(--muted); }
+.sub { font-size: calc(1.9vh * var(--card-scale, 1)); color: var(--muted); }
 
-/* Pilule "N° X" du Killer (primary(alpha .2), rayon 8dp -> 1.1vh côté app),
-   éclatée en label + grand chiffre : la carte étant maintenant une ligne
-   compacte, la cible peut se permettre d'être le repère visuel dominant
-   plutôt qu'un texte discret sous le nom. */
+/* Chiffre cible du Killer : même traitement que le score du X01 — gros,
+   centré, c'est LE repère de la carte plutôt qu'une pilule discrète. */
 .target-pill {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.7vh;
-  align-self: flex-start;
-  margin-top: 0.5vh;
-  padding: 0.5vh 1.3vh;
-  border-radius: 1.1vh;
-  background: rgba(255, 109, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2vh;
 }
 .target-pill .killer-target-label {
-  font-size: 1.4vh;
+  font-size: calc(1.9vh * var(--card-scale, 1));
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--primary);
+  letter-spacing: 0.1em;
+  color: var(--muted);
   text-transform: uppercase;
 }
 .target-pill .killer-target-num {
-  font-size: 3.4vh;
+  font-size: calc(10vh * var(--card-scale, 1));
   font-weight: 900;
   color: var(--primary);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-/*
-  Animation de fond d'une carte : les mêmes fichiers que l'app, au même endroit.
-  `fire_card` couvre toute la carte du killer (comme le LottieAnimation en
-  matchParentSize côté Compose) ; `ghost` reste petit et posé à droite, à
-  l'image du fantôme qui erre sur la carte d'un éliminé.
-*/
-.card-anim {
-  position: absolute;
-  pointer-events: none;
-  z-index: 0;
-}
-.card-anim.fire {
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.7;   /* même alpha que côté app */
-}
-/* Le fantôme reste petit et flotte entre le nom et le badge : la ligne Killer
-   est compacte, le poser à droite le ferait chevaucher le « ÉLIMINÉ ». */
-.card-anim.ghost {
-  top: 50%;
-  left: 50%;
-  width: 9vh;
-  height: 9vh;
-  transform: translate(-50%, -50%);
-  opacity: 0.75;
-}
-
-/* Le contenu de la carte passe au-dessus de son animation de fond. */
+/* Le contenu de la carte passe au-dessus de son animation de fond (killerGlow
+   ci-dessus, ou simplement rien pour un éliminé — le grayscale suffit). */
 .card > .card-head,
 .card > .members,
+.card > .card-center,
 .card > .foot { position: relative; z-index: 1; }
 
 /*
@@ -393,11 +393,6 @@ html, body {
   (l'app fait pareil : une équipe n'appartient à aucun joueur, donc pas de
   couleur perso), et les coéquipiers défilent dessous, le lanceur en gras.
 */
-/* Les coéquipiers se collent sous le nom d'équipe ; seul le score est repoussé
-   en bas, sinon `space-between` étalerait les trois blocs à égale distance. */
-.card.team-card { justify-content: flex-start; }
-.card.team-card .foot { margin-top: auto; }
-
 .card.team-card .name {
   color: var(--primary);
   font-size: 2.2vh;
@@ -416,12 +411,12 @@ html, body {
 .member { display: inline-flex; align-items: center; gap: 0.5vw; min-width: 0; }
 
 .member-avatar {
-  width: 3.4vh;
-  height: 3.4vh;
+  width: calc(3.4vh * var(--card-scale, 1));
+  height: calc(3.4vh * var(--card-scale, 1));
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 1.6vh;
+  font-size: calc(1.6vh * var(--card-scale, 1));
   font-weight: 700;
   color: #fff;
   flex: none;
@@ -429,7 +424,7 @@ html, body {
 .member-avatar.mini { width: 2.6vh; height: 2.6vh; font-size: 1.3vh; }
 
 .member-name {
-  font-size: 2vh;
+  font-size: calc(2vh * var(--card-scale, 1));
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -442,27 +437,61 @@ html, body {
 
 .cricket-members { gap: 0.4vw; }
 
+/* Pied de carte : uniquement le badge de statut Killer, centré en bas.
+   Vide (donc sans hauteur) en X01/duo. */
+.foot:not(:empty) { display: flex; justify-content: center; margin-top: 0.8vh; }
+
 /*
-  Badge de statut Killer (bas-droite de la carte), 4 variantes exactement
-  comme KillerStatusBadge() : compétitif (cœur + vies), éliminé, killer
-  (flamme + barres), et le compte de touches par défaut en barres | | |.
+  Badge de statut Killer, 4 variantes exactement comme KillerStatusBadge() :
+  compétitif (cœur + vies), éliminé, killer (flamme), et la jauge à trois
+  barres par défaut.
 */
 .status-badge {
   align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 0.8vh;
-  padding: 1vh 1.7vh;
-  border-radius: 1.6vh;
-  font-size: 2.8vh;
+  gap: 1.2vh;
+  padding: calc(1.4vh * var(--card-scale, 1)) calc(2.5vh * var(--card-scale, 1));
+  border-radius: 1.8vh;
+  font-size: calc(4.8vh * var(--card-scale, 1));
   font-weight: 800;
 }
 .status-badge.touches { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
-.status-badge.lives { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
-.status-badge.lives .icon { color: var(--danger); }
 .status-badge.killer { background: var(--primary); color: #fff; }
-.status-badge.eliminated { background: rgba(255, 23, 68, 0.2); color: var(--danger); font-size: 2.3vh; }
-.status-badge .icon { width: 2.8vh; height: 2.8vh; flex: none; }
+.status-badge.eliminated { background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); font-size: calc(3.4vh * var(--card-scale, 1)); }
+.status-badge .icon { width: calc(4.8vh * var(--card-scale, 1)); height: calc(4.8vh * var(--card-scale, 1)); flex: none; }
+
+/* Vies (Killer compétitif) : même poids visuel que la jauge à barres du
+   classique — un cœur + un chiffre, mais ni l'un ni l'autre ne doit passer
+   pour un détail à côté du texte. */
+.status-badge.lives {
+  background: rgba(255, 109, 0, 0.15);
+  color: var(--primary);
+  font-size: calc(6vh * var(--card-scale, 1));
+}
+.status-badge.lives .icon {
+  color: var(--danger);
+  width: calc(5.6vh * var(--card-scale, 1));
+  height: calc(5.6vh * var(--card-scale, 1));
+}
+
+/* Jauge à trois barres (Killer classique, avant de devenir killer) : chaque
+   barre est un vrai SVG à la géométrie fixe — contrairement au caractère
+   "|" d'une police, sa largeur/hauteur ne dépend jamais de la police système
+   de la télé. Les 3 emplacements restent visibles en permanence (pleins ou
+   fantômes) pour que "combien il en manque" se lise aussi vite que "combien
+   il en a". Nettement plus grosses que le reste du badge : c'est LA donnée
+   de cette carte, pas un détail à côté du texte. */
+.tally { display: inline-flex; align-items: center; gap: calc(1vh * var(--card-scale, 1)); }
+.tally-bar {
+  width: calc(2.1vh * var(--card-scale, 1));
+  height: calc(5.6vh * var(--card-scale, 1));
+}
+.tally-bar .bar { width: 100%; height: 100%; display: block; }
+/* Vide : contour creux gris — plein : pastille orange pleine. Deux formes
+   franchement différentes plutôt qu'une nuance d'opacité, illisible de loin. */
+.tally-bar .bar rect { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: 0.55; }
+.tally-bar.filled .bar rect { fill: var(--primary); stroke: none; opacity: 1; }
 
 /* ------------------------------------------------------------- CRICKET */
 
@@ -488,7 +517,7 @@ html, body {
   row-gap: 0.7vh;
   height: 100%;
 }
-.cricket-target-col { width: 9vw; flex: none; }
+.cricket-target-col { width: 10vw; flex: none; }
 .cricket-player-col { flex: 1; min-width: 0; }
 
 .cricket-target-head {
@@ -496,8 +525,8 @@ html, body {
   flex-direction: column;
   justify-content: center;
 }
-.cricket-target-head .big { font-size: 2vh; font-weight: 800; color: var(--muted); }
-.cricket-target-head .small { font-size: 1.3vh; color: var(--muted); opacity: 0.7; }
+.cricket-target-head .big { font-size: 2.4vh; font-weight: 800; color: var(--muted); }
+.cricket-target-head .small { font-size: 1.5vh; color: var(--muted); opacity: 0.7; }
 
 .cricket-target-cell {
   border-radius: 1vh;
@@ -505,7 +534,7 @@ html, body {
   color: var(--primary);
   display: grid;
   place-items: center;
-  font-size: 2.1vh;
+  font-size: 3.4vh;
   font-weight: 800;
 }
 
@@ -544,20 +573,31 @@ html, body {
 }
 .cricket-col.active .cricket-cell { background: var(--surface); }
 
-.mark-dot { font-size: 2.4vh; color: var(--muted); opacity: 0.35; }
-.mark-slash, .mark-x { font-size: 2.8vh; font-weight: 800; color: var(--primary); }
-.mark-closed {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4vh;
-  padding: 0.4vh 0.9vh;
-  border-radius: 0.7vh;
-  background: var(--secondary);
-  color: #fff;
-  font-size: 1.3vh;
-  font-weight: 800;
+/* Rond plein plutôt que le caractère "•" : sa taille ne dépend plus de la
+   police système de la télé, qui le rendait minuscule quel que soit le
+   font-size demandé. */
+.mark-dot {
+  display: block;
+  width: 2.2vh;
+  height: 2.2vh;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.4;
 }
-.mark-closed .icon { width: 1.4vh; height: 1.4vh; }
+.mark-slash, .mark-x { font-size: 4vh; font-weight: 800; color: var(--primary); }
+
+/* Fermé : un simple rond vert coché, sans texte "FERMÉ" — au même endroit et
+   à la même taille que les autres marques (point/slash/X), pour que l'œil
+   parcoure la ligne sans changer d'échelle de lecture à chaque cellule. */
+.mark-closed {
+  width: 3.6vh;
+  height: 3.6vh;
+  border-radius: 50%;
+  background: var(--secondary);
+  display: grid;
+  place-items: center;
+}
+.mark-closed .icon { width: 2.1vh; height: 2.1vh; color: #fff; }
 
 /* Avatar miniature dans l'en-tête de colonne Cricket. */
 .cricket-avatar {
@@ -586,12 +626,18 @@ html, body {
   font-size: 2.6vh;
   font-weight: 800;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.9vw;
+  gap: 0.6vh 0.9vw;
 }
 .checkout .icon { width: 2.6vh; height: 2.6vh; color: var(--secondary); flex: none; }
 .checkout .label { color: var(--secondary); font-weight: 700; }
 .checkout .value { color: var(--text); font-weight: 800; }
+/* Sorties alternatives : plusieurs façons de finir, la première reste la
+   plus visible, les suivantes en retrait plutôt qu'égales — sinon l'œil ne
+   sait plus laquelle jouer en premier. */
+.checkout .sep { color: var(--secondary); font-weight: 700; font-size: 2vh; }
+.checkout .value.alt { font-size: 2.1vh; color: var(--muted); font-weight: 700; }
 
 /* Bust : remplissage plat error(alpha .2), pas de bordure non plus. */
 .bust {
@@ -608,7 +654,7 @@ html, body {
 }
 .bust .icon { width: 2.6vh; height: 2.6vh; flex: none; }
 
-/* Secousse de tout l'écran pendant une alerte Killer. */
+/* Secousse de l'écran pendant une alerte Killer. */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   15% { transform: translateX(-1.1vw); }
@@ -618,6 +664,10 @@ html, body {
 }
 .quake { animation: shake 480ms; }
 .bust { animation: shake 440ms; }
+
+/* Comme ShakeEffect.shakeWhile côté app : le plateau tremble en boucle tant
+   que la carte d'alerte reste affichée par-dessus, pas juste un aller-retour. */
+.game.quaking { animation: shake 480ms ease-in-out infinite; }
 
 /* ------------------------------------------------------------ BALAYAGE FX */
 
@@ -639,9 +689,10 @@ html, body {
 /* -------------------------------------------------------------- OVERLAYS */
 
 /*
-  L'app couvre l'écran d'une carte pleine couleur (KillerAlertOverlay :
-  containerColor = accentColor, pas de fond noir translucide) : on reprend ce
-  parti — une teinte franche, pas un voile sombre avec du texte coloré dessus.
+  Reprend le Dialog + Card 85%/70% de KillerAlertOverlay : une vraie modale
+  centrée sur un voile sombre, pas une page entière — le plateau reste visible
+  (et tremble, cf. .game.quaking) tout autour, exactement comme le Dialog
+  Compose laisse voir l'écran de jeu trembler derrière la carte.
 */
 .overlay {
   position: fixed;
@@ -649,29 +700,33 @@ html, body {
   z-index: 50;
   display: grid;
   place-items: center;
-  background: var(--overlay-color, var(--primary));
+  background: rgba(17, 24, 39, 0.55);
   animation: fadeIn 200ms ease-out;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-.overlay-inner {
-  text-align: center;
-  animation: overlayPop 520ms cubic-bezier(.2,.8,.2,1);
+.overlay-card {
+  position: relative;
+  width: min(85vw, 120vh);
+  height: 70vh;
+  max-width: 94vw;
+  border-radius: 4vh;
+  overflow: hidden;
+  background: var(--overlay-color, var(--primary));
+  display: grid;
+  place-items: center;
+  animation: overlayPop 420ms cubic-bezier(.2,.8,.2,1);
 }
 @keyframes overlayPop {
   0% { opacity: 0; transform: scale(0.8) translateY(3vh); }
   100% { opacity: 1; transform: none; }
 }
 
-/* Anime dragon_fire/fire_card (killer) ou dead_emoji/mediation_skull/rip_dead
-   (élimination) — mêmes fichiers .lottie que côté app. Centré au-dessus du
-   texte plutôt qu'en plein cadre derrière : le composant web n'expose le
-   recadrage "cover" que via une API JS non stabilisée, et un texte par-dessus
-   une animation illustrative non recadrée devient illisible. */
-.overlay-lottie {
-  width: 30vh;
-  height: 30vh;
-  margin: 0 auto;
+.overlay-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 4vh;
 }
 
 .overlay-icon { font-size: 14vh; line-height: 1; }

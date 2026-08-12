@@ -30,9 +30,20 @@
     </section>
 
     <section id="board" class="hidden">
-      <div id="podium" class="podium"></div>
-      <p id="jokeLine" class="joke hidden">Si je ne suis pas premier, c'est qu'un hacker a eu accès à la BDD et a modifié les stats.</p>
-      <div id="rest" class="rest"></div>
+      <div class="tabs" role="tablist">
+        <button id="tabPodium" class="tab active" role="tab" aria-selected="true">Podium</button>
+        <button id="tabByMode" class="tab" role="tab" aria-selected="false">Détail par mode</button>
+      </div>
+
+      <div id="podiumView">
+        <div id="podium" class="podium"></div>
+        <p id="jokeLine" class="joke hidden">Si je ne suis pas premier, c'est qu'un hacker a eu accès à la BDD et a modifié les stats.</p>
+        <div id="rest" class="rest"></div>
+      </div>
+
+      <div id="modeView" class="hidden">
+        <div id="modeList" class="mode-list"></div>
+      </div>
     </section>
   </main>
 

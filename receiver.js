@@ -31,7 +31,6 @@ const dom = {
   checkout: el('checkout'),
   bust: el('bust'),
   overlay: el('overlay'),
-  overlayLottie: el('overlayLottie'),
   overlayIcon: el('overlayIcon'),
   overlayTitle: el('overlayTitle'),
   overlayName: el('overlayName'),
@@ -53,23 +52,8 @@ const ICONS = {
   trophy: '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19 5h-2V3H7v2H5a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4c.5 1.9 2 3.4 4 3.85V18H8v2h8v-2h-3v-2.15c2-.45 3.5-1.95 4-3.85a4 4 0 0 0 4-4V7a2 2 0 0 0-2-2zM5 8V7h2v2.8A2 2 0 0 1 5 8zm14 0a2 2 0 0 1-2 1.8V7h2v1z"/></svg>',
 };
 
-/**
- * Animations reprises telles quelles de app/src/main/res/raw.
- *
- * Chaque fichier a une place et une seule, exactement comme côté app :
- * `fire_card` est la signature de la carte d'un killer, `ghost` celle d'un
- * éliminé, et aucun des deux n'apparaît ailleurs — surtout pas dans les
- * annonces plein écran, qui ont leurs propres animations.
- */
-const CARD_LOTTIE_KILLER = 'assets/lottie/fire_card.lottie';
-const CARD_LOTTIE_ELIMINATED = 'assets/lottie/ghost.lottie';
-const OVERLAY_LOTTIE_KILLER = 'assets/lottie/dragon_fire.lottie';
-const OVERLAY_LOTTIES_ELIMINATED = [
-  'assets/lottie/dead_emoji.lottie',
-  'assets/lottie/mediation_skull.lottie',
-  'assets/lottie/rip_dead.lottie',
-];
-const pickRandom = (arr) => arr[(Math.random() * arr.length) | 0];
+/** Une barre pleine = une touche sur son propre chiffre, en Killer classique. */
+const TALLY_BAR = '<svg class="bar" viewBox="0 0 10 32" fill="currentColor"><rect x="1" y="1" width="8" height="30" rx="3"/></svg>';
 
 /** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
 const DEFAULT_CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
@@ -105,10 +89,15 @@ function renderDarts(state) {
 }
 
 function renderFooter(state) {
-  const hasCheckout = !!state.checkout;
+  // Plusieurs façons de finir plutôt qu'une seule : la tablette en envoie
+  // jusqu'à 3, la meilleure en tête.
+  const options = Array.isArray(state.checkout) ? state.checkout : [];
+  const hasCheckout = options.length > 0;
   dom.checkout.classList.toggle('hidden', !hasCheckout);
   if (hasCheckout) {
-    dom.checkout.innerHTML = `${ICONS.target}<span class="label">Checkout ${state.activePlayerRemainingScore ?? ''} :</span><span class="value">${state.checkout}</span>`;
+    const [first, ...rest] = options;
+    const altHtml = rest.map((option) => `<span class="sep">ou</span><span class="value alt">${option}</span>`).join('');
+    dom.checkout.innerHTML = `${ICONS.target}<span class="label">Checkout ${state.activePlayerRemainingScore ?? ''} :</span><span class="value">${first}</span>${altHtml}`;
   }
 
   const hasBust = !!state.bustMessage;
@@ -120,18 +109,14 @@ function renderFooter(state) {
 
 function renderCardGrid(state) {
   const players = state.players || [];
-  const isKiller = state.mode === 'killer';
-  // Killer : côté app c'est une liste de lignes compactes (une Row par joueur),
-  // pas une grille de cartes carrées — les faire vivre dans la même grille que
-  // le 301 les étirait sur toute la hauteur de la colonne pour rien. Au-delà de
-  // cinq joueurs la liste passe sur deux colonnes, sinon elle déborde de l'écran.
-  const count = isKiller
-    ? (players.length > 5 ? 'many' : 'few')
-    : (players.length > 6 ? 'many' : String(players.length));
-  const layoutKey = `cards:${isKiller ? 'killer' : 'grid'}:${count}:${players.length}`;
+  // Killer partage désormais exactement la même grille de cartes que le X01
+  // (même form-factor pour tous les modes) : la bordure ne sert plus qu'à
+  // dire "c'est son tour", pas à coder le statut killer/éliminé en plus.
+  const count = players.length > 6 ? 'many' : String(players.length);
+  const layoutKey = `cards:grid:${count}:${players.length}`;
 
   if (playersLayoutKey !== layoutKey) {
-    dom.players.className = isKiller ? 'players killer-list' : 'players';
+    dom.players.className = 'players';
     dom.players.dataset.count = count;
     dom.players.innerHTML = '';
     players.forEach(() => dom.players.appendChild(buildCard()));
@@ -151,13 +136,17 @@ function buildCard() {
       <div class="avatar"></div>
       <div style="min-width:0">
         <div class="name"></div>
-        <div class="target-pill hidden"></div>
       </div>
     </div>
     <div class="members hidden"></div>
-    <div class="foot" style="display:flex; align-items:flex-end; justify-content:space-between; gap:1vw;">
+    <div class="card-center">
       <div class="score"></div>
+      <div class="target-pill hidden">
+        <span class="killer-target-label">Cible</span>
+        <span class="killer-target-num"></span>
+      </div>
     </div>
+    <div class="foot"></div>
   `;
   return card;
 }
@@ -166,26 +155,12 @@ function updateCard(card, player, state) {
   const isKiller = state.mode === 'killer';
   card.style.setProperty('--player-color', player.color || '#FF6D00');
 
-  // Côté app la carte Killer est une seule ligne (pas de score séparé) : on
-  // retrouve cette proportion plutôt que de garder une carte aussi haute que
-  // celles du 301 avec une ligne de score vide en dessous.
-  card.classList.toggle('mode-killer', isKiller);
-
-  // En X01/duo l'accent suit le tour ; au Killer le statut (killer/éliminé)
-  // reste affiché même hors tour, exactement comme côté app.
-  card.classList.toggle('active', !!player.isActive && !isKiller);
+  // La bordure colorée suit UNIQUEMENT le tour, comme au X01 — le statut
+  // killer/éliminé se lit sur le badge, pas sur la bordure (sinon on ne sait
+  // plus si la carte accentuée est "à qui le tour" ou "qui est le tueur").
+  card.classList.toggle('active', !!player.isActive);
   card.classList.toggle('killer-status', isKiller && !!player.isKiller && !player.isEliminated);
   card.classList.toggle('eliminated-status', isKiller && !!player.isEliminated);
-  if (isKiller && player.isActive && !player.isKiller && !player.isEliminated) {
-    card.classList.add('active');
-  }
-
-  // Mêmes animations de carte que côté app : les flammes pour le killer, le
-  // fantôme pour l'éliminé. Rien pour les autres.
-  let cardLottie = null;
-  if (isKiller && player.isEliminated) cardLottie = CARD_LOTTIE_ELIMINATED;
-  else if (isKiller && player.isKiller) cardLottie = CARD_LOTTIE_KILLER;
-  setCardAnimation(card, cardLottie);
 
   // En duo la carte porte une équipe : pas d'avatar unique en tête, mais la
   // liste des coéquipiers dessous, celui qui lance étant mis en avant — c'est
@@ -202,24 +177,34 @@ function updateCard(card, player, state) {
 
   card.querySelector('.name').textContent = player.name || '';
 
+  // Une carte recyclée peut venir d'une configuration différente (une
+  // équipe redevenue un joueur seul, par ex., si deux parties s'enchaînent
+  // avec le même nombre de cartes) : on vide toujours le HTML plutôt que de
+  // ne le faire que dans le cas "rempli", sinon le contenu masqué reste
+  // périmé en mémoire au lieu d'être remplacé.
   const memberBox = card.querySelector('.members');
   memberBox.classList.toggle('hidden', !members);
-  if (members) {
-    memberBox.innerHTML = members.map((member) => `
+  memberBox.innerHTML = members ? members.map((member) => `
       <span class="member${member.isThrowing ? ' throwing' : ''}">
         <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
         <span class="member-name">${member.name || ''}</span>
       </span>
-    `).join('');
-  }
+    `).join('') : '';
 
   const pill = card.querySelector('.target-pill');
-  if (isKiller) {
-    pill.innerHTML = `<span class="killer-target-label">Cible</span><span class="killer-target-num">${player.targetNumber ?? '—'}</span>`;
-    pill.classList.remove('hidden');
-  } else {
-    pill.classList.add('hidden');
+  pill.classList.toggle('hidden', !isKiller);
+  pill.querySelector('.killer-target-num').textContent = player.targetNumber ?? '—';
+
+  const score = card.querySelector('.score');
+  const next = String(player.score ?? 0);
+  if (score.textContent !== next) {
+    score.textContent = next;
+    replayAnimation(score, 'bump');
   }
+  // Au Killer le score numérique de la carte n'a pas de sens (c'est la cible
+  // qui porte l'information au centre) : on masque la cellule au lieu
+  // d'afficher 0.
+  score.style.display = isKiller ? 'none' : '';
 
   const foot = card.querySelector('.foot');
   let badge = foot.querySelector('.status-badge');
@@ -234,42 +219,6 @@ function updateCard(card, player, state) {
   } else if (badge) {
     badge.remove();
   }
-
-  const score = foot.querySelector('.score');
-  const next = String(player.score ?? 0);
-  if (score.textContent !== next) {
-    score.textContent = next;
-    replayAnimation(score, 'bump');
-  }
-  // Au Killer le score numérique de la carte n'a pas de sens (c'est le badge
-  // qui porte l'information) : on masque la cellule plutôt que d'afficher 0.
-  score.style.display = isKiller ? 'none' : '';
-}
-
-/**
- * Place (ou retire) l'animation de fond d'une carte.
- *
- * Le lecteur .lottie est un composant lourd : on ne le recrée que si la source
- * change réellement, sinon un simple rafraîchissement de score relancerait
- * l'animation depuis zéro à chaque fléchette.
- */
-function setCardAnimation(card, src) {
-  const current = card.querySelector('.card-anim');
-
-  if (!src) {
-    if (current) current.remove();
-    return;
-  }
-  if (current && current.dataset.src === src) return;
-  if (current) current.remove();
-
-  const anim = document.createElement('dotlottie-wc');
-  anim.className = src === CARD_LOTTIE_ELIMINATED ? 'card-anim ghost' : 'card-anim fire';
-  anim.dataset.src = src;
-  anim.setAttribute('src', src);
-  anim.setAttribute('loop', '');
-  anim.setAttribute('autoplay', '');
-  card.insertBefore(anim, card.firstChild);
 }
 
 /** Reproduit KillerStatusBadge() : 4 variantes exactement comme côté app. */
@@ -288,13 +237,18 @@ function renderKillerBadge(badge, player, state) {
 
   if (player.isKiller) {
     badge.className = 'status-badge killer';
-    badge.innerHTML = `${ICONS.fire}<span>|||  KILLER</span>`;
+    badge.innerHTML = `${ICONS.fire}<span>KILLER</span>`;
     return;
   }
 
+  // Trois jauges toujours visibles plutôt qu'un chiffre "X/3" : à distance
+  // un nombre seul reste ambigu (2 sur combien ?), la vraie barre remplie
+  // se lit d'un coup d'œil, façon jauge de vie.
   badge.className = 'status-badge touches';
-  const bars = { 0: '-', 1: '|', 2: '| |' }[player.touches] ?? '| | |';
-  badge.innerHTML = `<span>${bars}</span>`;
+  const touches = player.touches ?? 0;
+  badge.innerHTML = `<span class="tally">${[0, 1, 2].map((i) =>
+    `<span class="tally-bar${i < touches ? ' filled' : ''}">${TALLY_BAR}</span>`
+  ).join('')}</span>`;
 }
 
 // --------------------------------------------------------------- CRICKET
@@ -389,12 +343,12 @@ function updateCricketColumn(col, player, targets, state) {
   });
 }
 
-/** Reproduit CricketMarkSymbol() : point / slash / X / pilule FERMÉ verte. */
+/** Reproduit CricketMarkSymbol() : point / slash / X / rond vert coché. */
 function cricketMarkSymbol(hits) {
-  if (hits >= 3) return `<span class="mark-closed">${ICONS.check}FERMÉ</span>`;
+  if (hits >= 3) return `<span class="mark-closed">${ICONS.check}</span>`;
   if (hits === 2) return '<span class="mark-x">X</span>';
   if (hits === 1) return '<span class="mark-slash">/</span>';
-  return '<span class="mark-dot">•</span>';
+  return '<span class="mark-dot"></span>';
 }
 
 // ------------------------------------------------------------- EFFETS
@@ -415,19 +369,11 @@ function quake() {
   replayAnimation(dom.app, 'quake');
 }
 
-function showOverlay({ lottie, icon, title, name, sub, color, duration = 3200 }) {
+function showOverlay({ icon, title, name, sub, color, duration = 2800 }) {
   clearTimeout(overlayTimer);
 
-  if (lottie) {
-    dom.overlayLottie.setAttribute('src', lottie);
-    dom.overlayLottie.classList.remove('hidden');
-    dom.overlayIcon.classList.add('hidden');
-  } else {
-    dom.overlayLottie.classList.add('hidden');
-    dom.overlayLottie.removeAttribute('src');
-    dom.overlayIcon.innerHTML = icon || '';
-    dom.overlayIcon.classList.remove('hidden');
-  }
+  dom.overlayIcon.innerHTML = icon || '';
+  dom.overlayIcon.classList.remove('hidden');
 
   dom.overlayTitle.textContent = title;
   dom.overlayName.textContent = name || '';
@@ -436,7 +382,14 @@ function showOverlay({ lottie, icon, title, name, sub, color, duration = 3200 })
   dom.overlay.classList.remove('hidden');
   replayAnimation(dom.overlay.querySelector('.overlay-inner'), 'pop');
 
-  overlayTimer = setTimeout(() => dom.overlay.classList.add('hidden'), duration);
+  // Le plateau tremble tant que la carte reste affichée, exactement comme
+  // shakeWhile() côté app — pas un simple aller-retour de 480ms.
+  dom.game.classList.add('quaking');
+
+  overlayTimer = setTimeout(() => {
+    dom.overlay.classList.add('hidden');
+    dom.game.classList.remove('quaking');
+  }, duration);
 }
 
 /** Compare l'état reçu au précédent pour déclencher les effets qui vont bien. */
@@ -461,14 +414,14 @@ function reactToChanges(state) {
 function handleEvent(event) {
   switch (event.kind) {
     case 'becameKiller':
-      showOverlay({ lottie: OVERLAY_LOTTIE_KILLER, title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
+      // showOverlay() se charge déjà de faire trembler le plateau tant que la
+      // carte reste affichée, plus besoin du quake() ponctuel en plus.
+      showOverlay({ icon: ICONS.fire, title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
       confetti({ colors: ['#FF6D00', '#FFC107', '#FF1744'], count: 90, spread: 'up' });
-      quake();
       break;
 
     case 'eliminated':
-      showOverlay({ lottie: pickRandom(OVERLAY_LOTTIES_ELIMINATED), title: 'Élimination', name: event.player, color: '#FF1744' });
-      quake();
+      showOverlay({ icon: ICONS.eliminated, title: 'Élimination', name: event.player, color: '#FF1744' });
       break;
 
     case 'victory':
@@ -478,9 +431,9 @@ function handleEvent(event) {
         name: event.player,
         sub: event.subtitle || '',
         color: '#FFC107',
-        duration: 12000,
+        duration: 3000,
       });
-      confetti({ count: 320, duration: 7000 });
+      confetti({ count: 320, duration: 3000 });
       break;
 
     default:
@@ -666,7 +619,7 @@ function startDemo() {
       () => { darts.push({ label: 'BULL', points: 50 }); scores[2] -= 50; render(snap()); },
       () => { active = 2; darts = []; turn = 2; render(snap()); },
       () => { render(snap({ bustMessage: 'Bust : score dépassé !' })); },
-      () => { active = 0; darts = []; render(snap({ checkout: 'T20 D20' })); },
+      () => { active = 0; darts = []; render(snap({ checkout: ['T20 D20', '20 T20 D10'] })); },
     );
   }
 
