@@ -262,7 +262,10 @@ function renderCricketBoard(state) {
 
   if (playersLayoutKey !== layoutKey) {
     dom.players.className = 'players cricket-board';
-    delete dom.players.dataset.count;
+    // Même paliers que le X01/Killer : moins de joueurs, plus de place par
+    // colonne, donc avatars/noms/scores plus grands — --card-scale s'applique
+    // pareil ici, Cricket n'a plus de raison de rester à taille fixe.
+    dom.players.dataset.count = players.length > 6 ? 'many' : String(players.length);
     dom.players.innerHTML = '';
     dom.players.appendChild(buildCricketTargetColumn(targets));
     players.forEach(() => dom.players.appendChild(buildCricketPlayerColumn(targets)));
