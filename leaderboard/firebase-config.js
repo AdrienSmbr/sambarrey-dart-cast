@@ -3,10 +3,19 @@
 // Firebase sécurise via les règles Firestore (firestore.rules), pas en cachant
 // cette config — elle est de toute façon visible de n'importe quel navigateur.
 export const firebaseConfig = {
-  apiKey: "REMPLACE_MOI",
-  authDomain: "REMPLACE_MOI.firebaseapp.com",
-  projectId: "REMPLACE_MOI",
-  storageBucket: "REMPLACE_MOI.appspot.com",
-  messagingSenderId: "REMPLACE_MOI",
-  appId: "REMPLACE_MOI",
+
+  apiKey: "AIzaSyB84B-FNljbXeC1bDeonYIuIXIiP2eNHl8",
+
+  authDomain: "sambarrey-dart.firebaseapp.com",
+
+  projectId: "sambarrey-dart",
+
+  storageBucket: "sambarrey-dart.firebasestorage.app",
+
+  messagingSenderId: "240706706444",
+
+  appId: "1:240706706444:web:e44fc3225f5ce9c4ea6229",
+
+  measurementId: "G-GHRV4LW37R"
+
 };
