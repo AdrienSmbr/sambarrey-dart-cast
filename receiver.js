@@ -31,6 +31,7 @@ const dom = {
   checkout: el('checkout'),
   bust: el('bust'),
   overlay: el('overlay'),
+  overlayArt: el('overlayArt'),
   overlayIcon: el('overlayIcon'),
   overlayTitle: el('overlayTitle'),
   overlayName: el('overlayName'),
@@ -55,8 +56,31 @@ const ICONS = {
 /** Une barre pleine = une touche sur son propre chiffre, en Killer classique. */
 const TALLY_BAR = '<svg class="bar" viewBox="0 0 10 32" fill="currentColor"><rect x="1" y="1" width="8" height="30" rx="3"/></svg>';
 
+/** Marques du Cricket : une touche (barre), deux touches (croix). */
+const MARK_SLASH = '<span class="mark-stroke mark-slash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><line x1="6" y1="19" x2="18" y2="5"/></svg></span>';
+const MARK_X = '<span class="mark-stroke mark-x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><line x1="5.5" y1="18.5" x2="18.5" y2="5.5"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg></span>';
+
 /** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
 const DEFAULT_CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
+
+/**
+ * Animations d'événement, jouées une seule fois sur la modale plein écran.
+ *
+ * Ce sont les deux seuls .lottie de la page. Le reste du rendu est du CSS pur :
+ * un lecteur canvas/WASM qui tourne en permanence met un Chromecast d'entrée de
+ * gamme à genoux, mais trois secondes toutes les dix minutes ne coûtent rien.
+ */
+const OVERLAY_ART = {
+  crown: 'assets/lottie/crown.lottie',
+  gameOver: 'assets/lottie/game_over.lottie',
+};
+
+/** Version figée, comme sur la page du classement : une mise à jour amont ne
+ *  doit pas pouvoir casser l'écran de la télé du jour au lendemain. */
+const LOTTIE_PLAYER_SRC = 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-wc@0.9.25/dist/dotlottie-wc.js';
+
+/** Promesse de chargement du lecteur, lancée une seule fois. */
+let lottiePlayerLoad = null;
 
 /** Dernier état reçu, pour ne réagir qu'aux vraies transitions. */
 let previous = null;
@@ -295,6 +319,7 @@ function buildCricketPlayerColumn(targets) {
   col.className = 'cricket-col cricket-player-col';
   col.innerHTML = `
     <div class="cricket-head">
+      <div class="turn-flag">AU LANCER</div>
       <div class="row">
         <div class="cricket-avatar"></div>
         <div class="name"></div>
@@ -311,6 +336,11 @@ function buildCricketPlayerColumn(targets) {
 
 function updateCricketColumn(col, player, targets, state) {
   col.classList.toggle('active', !!player.isActive);
+  // La colonne entière prend la couleur du joueur quand c'est son tour, comme
+  // la bordure des cartes X01/Killer : sur un tableau Cricket où toutes les
+  // colonnes se ressemblent, un simple en-tête teinté en orange générique ne
+  // se repérait pas assez vite à l'autre bout de la pièce.
+  col.style.setProperty('--player-color', player.color || '#FF6D00');
 
   // Même logique qu'en X01 duo : une colonne par équipe, les coéquipiers en
   // pastilles sous le nom plutôt qu'un avatar unique.
@@ -346,11 +376,20 @@ function updateCricketColumn(col, player, targets, state) {
   });
 }
 
-/** Reproduit CricketMarkSymbol() : point / slash / X / rond vert coché. */
+/**
+ * Reproduit CricketMarkSymbol() : point / barre / croix / rond vert coché.
+ *
+ * Barre et croix sont dessinées en SVG plutôt qu'écrites en caractères « / »
+ * et « X ». Un glyphe se dimensionne par sa police : il fallait choisir un
+ * `font-size` en vh, qui soit débordait de la cellule à trois joueurs, soit
+ * restait minuscule à dix. Un SVG remplit la cellule qu'on lui donne, quelle
+ * que soit sa taille — et ce sont ces marques qu'on lit de l'autre bout de la
+ * pièce, pas les noms.
+ */
 function cricketMarkSymbol(hits) {
   if (hits >= 3) return `<span class="mark-closed">${ICONS.check}</span>`;
-  if (hits === 2) return '<span class="mark-x">X</span>';
-  if (hits === 1) return '<span class="mark-slash">/</span>';
+  if (hits === 2) return MARK_X;
+  if (hits === 1) return MARK_SLASH;
   return '<span class="mark-dot"></span>';
 }
 
@@ -372,8 +411,63 @@ function quake() {
   replayAnimation(dom.app, 'quake');
 }
 
-function showOverlay({ icon, title, name, sub, color, duration = 2800 }) {
+/**
+ * Charge le lecteur .lottie, au plus une fois par session.
+ *
+ * Appelé dès qu'une partie démarre et non au moment de l'événement : le module
+ * et son WASM mettent une bonne seconde à arriver sur un Chromecast, ce qui
+ * ferait rater l'animation à la victoire — l'unique moment où elle sert.
+ */
+function ensureLottiePlayer() {
+  if (!lottiePlayerLoad) {
+    lottiePlayerLoad = import(LOTTIE_PLAYER_SRC).catch((error) => {
+      // Rien de bloquant : l'icône SVG reste affichée à la place.
+      console.warn('Lecteur .lottie indisponible, repli sur les icônes', error);
+      return null;
+    });
+  }
+  return lottiePlayerLoad;
+}
+
+/**
+ * Remplace l'icône SVG par l'animation, si et seulement si le lecteur est déjà
+ * prêt et que la modale demandée est toujours celle affichée.
+ */
+function playOverlayArt(artKey) {
+  const src = OVERLAY_ART[artKey];
+  if (!src) return;
+
+  const token = overlayTimer;
+  ensureLottiePlayer().then(() => {
+    // Le lecteur est arrivé après la fermeture de la modale, ou une autre
+    // modale a pris sa place entre-temps : on ne rattrape rien. Sans ces
+    // gardes, un canvas WASM se retrouverait attaché à une modale invisible,
+    // sans plus rien pour le détruire.
+    if (!customElements.get('dotlottie-wc')) return;
+    if (overlayTimer !== token || dom.overlay.classList.contains('hidden')) return;
+
+    const player = document.createElement('dotlottie-wc');
+    player.setAttribute('src', src);
+    player.setAttribute('autoplay', '');
+    // Pas de `loop` : l'animation accompagne un moment, elle ne meuble pas.
+    player.style.width = '100%';
+    player.style.height = '100%';
+
+    dom.overlayArt.innerHTML = '';
+    dom.overlayArt.appendChild(player);
+    dom.overlayArt.classList.remove('hidden');
+    dom.overlayIcon.classList.add('hidden');
+  });
+}
+
+function clearOverlayArt() {
+  dom.overlayArt.innerHTML = '';
+  dom.overlayArt.classList.add('hidden');
+}
+
+function showOverlay({ icon, art, title, name, sub, color, duration = 2800, flavor = '' }) {
   clearTimeout(overlayTimer);
+  clearOverlayArt();
 
   dom.overlayIcon.innerHTML = icon || '';
   dom.overlayIcon.classList.remove('hidden');
@@ -382,6 +476,8 @@ function showOverlay({ icon, title, name, sub, color, duration = 2800 }) {
   dom.overlayName.textContent = name || '';
   dom.overlaySub.textContent = sub || '';
   dom.overlay.style.setProperty('--overlay-color', color || '#FF6D00');
+  // `flavor` habille la modale (or royal, game over…) sans toucher au reste.
+  dom.overlay.dataset.flavor = flavor;
   dom.overlay.classList.remove('hidden');
   replayAnimation(dom.overlay.querySelector('.overlay-inner'), 'pop');
 
@@ -392,7 +488,10 @@ function showOverlay({ icon, title, name, sub, color, duration = 2800 }) {
   overlayTimer = setTimeout(() => {
     dom.overlay.classList.add('hidden');
     dom.game.classList.remove('quaking');
+    clearOverlayArt();
   }, duration);
+
+  if (art) playOverlayArt(art);
 }
 
 /** Compare l'état reçu au précédent pour déclencher les effets qui vont bien. */
@@ -419,25 +518,62 @@ function handleEvent(event) {
     case 'becameKiller':
       // showOverlay() se charge déjà de faire trembler le plateau tant que la
       // carte reste affichée, plus besoin du quake() ponctuel en plus.
-      showOverlay({ icon: ICONS.fire, title: 'Nouveau killer', name: event.player, color: '#FF6D00' });
+      showOverlay({
+        icon: ICONS.fire,
+        title: 'Nouveau killer',
+        name: event.player,
+        color: '#FF6D00',
+        flavor: 'killer',
+      });
       confetti({ colors: ['#FF6D00', '#FFC107', '#FF1744'], count: 90, spread: 'up' });
       break;
 
     case 'eliminated':
-      showOverlay({ icon: ICONS.eliminated, title: 'Élimination', name: event.player, color: '#FF1744' });
+      showOverlay({
+        icon: ICONS.eliminated,
+        art: 'gameOver',
+        // « Game over » est déjà écrit dans l'animation : le répéter en titre
+        // ferait lire deux fois la même chose au même endroit.
+        title: 'Éliminé',
+        name: event.player,
+        color: '#FF1744',
+        flavor: 'gameover',
+        duration: 3400,
+      });
       break;
 
-    case 'victory':
+    case 'victory': {
+      // C'est la tablette qui déclare le roi (champ `isKing` du protocole) :
+      // la télé ne connaît aucune règle, et en duo le gagnant envoyé est
+      // « Équipe 2 », le roi n'apparaissant que dans les coéquipiers.
+      const king = !!event.isKing;
       showOverlay({
         icon: ICONS.trophy,
-        title: 'Victoire',
+        art: 'crown',
+        title: king ? 'Gloire au roi' : 'Victoire',
         name: event.player,
-        sub: event.subtitle || '',
+        sub: event.subtitle || (king ? 'Longue vie au roi' : ''),
         color: '#FFC107',
-        duration: 3000,
+        flavor: king ? 'king' : 'victory',
+        duration: king ? 5000 : 3800,
       });
-      confetti({ count: 320, duration: 3000 });
+      confetti({
+        count: king ? 460 : 320,
+        duration: king ? 5000 : 3800,
+        colors: king ? ['#FFC107', '#FFD54F', '#FFF8E1', '#FF6D00', '#fff'] : null,
+      });
+      // Le roi a droit à une seconde gerbe, tirée du bas : sur une télé, les
+      // confettis qui tombent seuls s'épuisent avant la fin de l'annonce.
+      if (king) {
+        setTimeout(() => confetti({
+          count: 200,
+          duration: 3200,
+          spread: 'up',
+          colors: ['#FFC107', '#FFD54F', '#fff'],
+        }), 500);
+      }
       break;
+    }
 
     default:
       break;
@@ -522,6 +658,11 @@ function render(state) {
 
   dom.idle.classList.add('hidden');
   dom.game.classList.remove('hidden');
+
+  // Une partie démarre : on va chercher le lecteur .lottie maintenant, pendant
+  // qu'il ne se passe rien, pour qu'il soit prêt à la première élimination.
+  // Le demander au moment de l'événement le ferait arriver trop tard.
+  ensureLottiePlayer();
 
   renderTurn(state);
   renderDarts(state);
@@ -671,7 +812,8 @@ function startDemo() {
       () => { killerState[1].touches = 3; killerState[1].isKiller = true; render(snap({ event: { kind: 'becameKiller', player: 'Adrien' } })); },
       () => { active = 1; render(snap()); },
       () => { killerState[3].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Stéphane' } })); },
-      () => { render(snap({ event: { kind: 'victory', player: 'Adrien', subtitle: 'Gloire au roi !' } })); },
+      // Le sacre : c'est la tablette qui pose `isKing`, la démo l'imite.
+      () => { render(snap({ event: { kind: 'victory', player: 'Adrien', isKing: true } })); },
     );
   }
 
@@ -726,6 +868,15 @@ function startDemo() {
       // score, autre lanceur — c'est tout l'intérêt du duo.
       () => { thrower = 1; darts = []; render(snap()); },
       () => { darts = [{ label: 'T20', points: 60 }]; scores[1] -= 60; render(snap()); },
+      // Victoire sans le roi : même modale, sans le sacre — c'est le cas à
+      // vérifier autant que l'autre, sinon on ne voit jamais que la version
+      // dorée en développant.
+      () => {
+        thrower = 4;
+        render(snap({
+          event: { kind: 'victory', player: 'Équipe 3', subtitle: 'Julien + Camille', isKing: false },
+        }));
+      },
     );
   }
 

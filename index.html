@@ -53,7 +53,14 @@
     <!-- SUPERPOSITIONS ÉVÉNEMENTIELLES (killer, élimination, victoire) -->
     <div id="overlay" class="overlay hidden">
       <div class="overlay-card">
+        <!-- Rayons et halo : purs dégradés CSS animés en rotation, aucun
+             repaint par frame, contrairement à une animation dessinée. -->
+        <div class="overlay-rays" aria-hidden="true"></div>
+        <div class="overlay-glow" aria-hidden="true"></div>
         <div class="overlay-inner">
+          <!-- Le Lottie prend la place de l'icône SVG quand le lecteur est
+               prêt ; l'icône reste le repli, jamais les deux à la fois. -->
+          <div id="overlayArt" class="overlay-art hidden"></div>
           <div id="overlayIcon" class="overlay-icon"></div>
           <div id="overlayTitle" class="overlay-title">NOUVEAU KILLER</div>
           <div id="overlayName" class="overlay-name">Adrien</div>
@@ -64,10 +71,17 @@
   </main>
 
   <!--
-    Dépendance externe de la page : le SDK Cast, imposé par la plateforme.
-    Tout le reste (rendu, icônes, particules, tremblement d'écran) est fait
-    maison en CSS/JS pur pour ne rien coûter à un Chromecast d'entrée de
-    gamme — plus de lecteur .lottie (canvas/WASM) qui tournait en continu.
+    Dépendances externes de la page : le SDK Cast, imposé par la plateforme.
+    Tout le rendu courant (scores, icônes, particules, tremblement d'écran)
+    est fait maison en CSS/JS pur pour ne rien coûter à un Chromecast d'entrée
+    de gamme.
+
+    Le lecteur .lottie (canvas/WASM) revient uniquement pour les deux
+    animations d'événement (couronne de victoire, game over) : il est chargé à
+    la demande par receiver.js, joué une fois, puis retiré du DOM. C'est
+    l'inverse de ce qui avait été supprimé — un lecteur qui tournait en
+    permanence derrière les cartes.
+
     Le SDK Cast est absent en navigateur : le mode démo prend alors le relais.
   -->
   <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>

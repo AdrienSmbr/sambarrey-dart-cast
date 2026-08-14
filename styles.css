@@ -293,15 +293,62 @@ html, body {
   50% { opacity: 1; transform: scale(1.04); }
 }
 
-/* Éliminé : bordure et carte grisées, jamais colorées — la couleur reste
-   le langage exclusif du "c'est son tour", le gris celui du "hors jeu". */
+/*
+  Éliminé : le joueur est sorti, la carte doit le dire sans qu'on ait à lire le
+  badge. Le gris seul ne suffisait pas — de loin, une carte pâle passe pour une
+  carte inactive de plus. On y ajoute donc trois choses qui ne coûtent qu'un
+  compositeur : une bande hachurée rouge en fond, une barre en travers, et le
+  nom rayé. La couleur du joueur, elle, reste réservée au "c'est son tour".
+*/
 .card.eliminated-status {
   background: var(--surface);
-  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
-  filter: grayscale(0.6);
-  opacity: 0.75;
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  /* Pas de `filter: grayscale` sur la carte entière : il éteignait aussi les
+     hachures et la barre, qui viraient au mauve et ne disaient plus rien. Ce
+     qui doit perdre ses couleurs, c'est le joueur — avatar et chiffres. */
+  opacity: 0.9;
 }
-.card.eliminated-status .name { color: var(--muted); }
+.card.eliminated-status .avatar,
+.card.eliminated-status .target-pill,
+.card.eliminated-status .score {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.card.eliminated-status .name {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 0.35vh;
+  text-decoration-color: var(--danger);
+}
+
+/* Hachures rouges : un dégradé répété, dessiné une fois puis composé — aucun
+   coût par frame, contrairement à un motif animé. */
+.card.eliminated-status::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 23, 68, 0.16) 0 1.4vh,
+    transparent 1.4vh 3.4vh
+  );
+  pointer-events: none;
+}
+
+/* La barre en travers : c'est elle qui se lit en premier à trois mètres. */
+.card.eliminated-status::after {
+  content: '';
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 50%;
+  height: 0.9vh;
+  border-radius: 0.45vh;
+  background: color-mix(in srgb, var(--danger) 85%, transparent);
+  transform: rotate(-8deg);
+  transform-origin: center;
+  pointer-events: none;
+}
 
 .card-head { display: flex; align-items: center; gap: 1vw; }
 
@@ -461,7 +508,13 @@ html, body {
 }
 .status-badge.touches { background: rgba(255, 109, 0, 0.15); color: var(--primary); }
 .status-badge.killer { background: var(--primary); color: #fff; }
-.status-badge.eliminated { background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); font-size: calc(3.4vh * var(--card-scale, 1)); }
+/* Rouge et non gris : le badge est la légende de la carte barrée juste
+   au-dessus, il doit parler la même langue qu'elle. */
+.status-badge.eliminated {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+  font-size: calc(3.4vh * var(--card-scale, 1));
+}
 .status-badge .icon { width: calc(4.8vh * var(--card-scale, 1)); height: calc(4.8vh * var(--card-scale, 1)); flex: none; }
 
 /* Vies (Killer compétitif) : même poids visuel que la jauge à barres du
@@ -517,8 +570,16 @@ html, body {
 .cricket-col {
   display: grid;
   /* L'en-tête grossit avec --card-scale exactement comme les cartes X01/
-     Killer : plus de place à 3-4 joueurs, plus dense à 8-10. */
-  grid-template-rows: calc(19vh * var(--card-scale, 1)) repeat(7, 1fr);
+     Killer : plus de place à 3-4 joueurs, plus dense à 8-10.
+     `minmax(0, 1fr)` et pas `1fr` seul : une ligne `1fr` reste sujette à sa
+     taille de contenu minimale (`min-height: auto`), qui grandissait avec la
+     marque qu'elle contient — les sept lignes cessaient d'être égales, une
+     colonne s'étirait, et l'écran entier se désalignait de ses voisines.
+     `minmax(0, 1fr)` force la ligne à la part d'espace calculée, quoi qu'il y
+     ait dedans ; c'est aussi ce qui donne aux marques une hauteur de cellule
+     bien définie, condition pour que leur propre `height: %` (styles ci-après)
+     se résolve au lieu de retomber sur la taille du contenu. */
+  grid-template-rows: calc(19vh * var(--card-scale, 1)) repeat(7, minmax(0, 1fr));
   row-gap: 0.7vh;
   height: 100%;
 }
@@ -544,6 +605,7 @@ html, body {
 }
 
 .cricket-head {
+  position: relative;
   border-radius: 1.4vh;
   background: var(--surface);
   border: 0.25vh solid transparent;
@@ -556,9 +618,48 @@ html, body {
   overflow: hidden;
 }
 .cricket-col.active .cricket-head {
-  background: rgba(255, 109, 0, 0.28);
-  border-color: var(--primary);
+  background: color-mix(in srgb, var(--player-color, var(--primary)) 30%, var(--surface));
+  border-color: var(--player-color, var(--primary));
 }
+
+/*
+  « C'est à qui ? » sur un tableau Cricket.
+
+  Sept lignes de marques identiques d'une colonne à l'autre : l'en-tête teinté
+  ne suffisait pas, l'œil ne sait pas où regarder. Trois repères s'ajoutent donc,
+  qui se lisent de loin même en diagonale :
+  la colonne entière est cernée et surélevée, ses cellules sont teintées de la
+  couleur du joueur, et une étiquette « AU LANCER » nomme la chose.
+*/
+.cricket-col.active {
+  position: relative;
+  border-radius: 1.6vh;
+  outline: 0.4vh solid var(--player-color, var(--primary));
+  outline-offset: 0.5vh;
+  z-index: 1;
+}
+
+.turn-flag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.4vh 0;
+  text-align: center;
+  font-size: calc(1.7vh * var(--card-scale, 1));
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #fff;
+  background: var(--player-color, var(--primary));
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 200ms, transform 200ms;
+}
+.cricket-col.active .turn-flag { opacity: 1; transform: none; }
+/* Le bandeau se pose par-dessus l'en-tête : on lui rend sa place plutôt que
+   de le laisser mordre sur l'avatar quand la colonne devient active. */
+.cricket-col.active .cricket-head { padding-top: calc(2.6vh * var(--card-scale, 1)); }
+
 .cricket-head .row { display: flex; align-items: center; gap: 0.6vh; max-width: 100%; }
 /* Avatar + nom + score de l'en-tête colonne : très en retrait par rapport
    au reste de l'écran avant ce passage, alors que c'est la seule façon de
@@ -571,41 +672,81 @@ html, body {
   white-space: nowrap;
 }
 .cricket-head .score { font-size: calc(6vh * var(--card-scale, 1)); font-weight: 800; color: var(--text); }
-.cricket-col.active .cricket-head .score { color: var(--primary); }
+.cricket-col.active .cricket-head .score { color: var(--player-color, var(--primary)); }
 
 .cricket-cell {
   border-radius: 1vh;
   background: var(--faint);
   display: grid;
   place-items: center;
+  /* Filet de sécurité : quoi qu'il arrive à la taille demandée par une marque,
+     la cellule ne la laisse jamais dépasser sur ses voisines. */
+  overflow: hidden;
 }
-.cricket-col.active .cricket-cell { background: var(--surface); }
+.cricket-col.active .cricket-cell {
+  background: color-mix(in srgb, var(--player-color, var(--primary)) 12%, var(--surface));
+}
+
+/*
+  Taille des marques.
+
+  Elles portent toute l'information du Cricket et étaient dimensionnées en vh
+  fixes : à trois joueurs, une barre restait aussi petite qu'à dix, perdue au
+  milieu d'une cellule devenue énorme. Elles se mesurent désormais sur leur
+  cellule (un pourcentage de sa hauteur), donc elles grossissent d'elles-mêmes
+  quand la table se vide et rétrécissent quand elle se remplit — sans jamais
+  déborder. Un débordement ne se contentait pas d'être laid : la ligne de
+  grille ne pouvant plus se réduire sous son contenu, la colonne s'allongeait
+  et se désalignait de ses voisines.
+
+  D'où aussi les SVG côté JS plutôt que les caractères « / » et « X », dont la
+  taille dépend d'une police et non de la place disponible.
+
+  Sizing en `vh` et non en `%` de la cellule : une hauteur en pourcentage
+  combinée à `aspect-ratio` ne se résolvait pas de façon fiable contre une
+  ligne de grille `1fr` (la valeur utilisée restait parfois collée à un ancien
+  calcul de mise en page). Le `vh` est stable, `--card-scale` lui fait suivre
+  le nombre de joueurs comme partout ailleurs sur l'écran, et `overflow:
+  hidden` sur la cellule (ci-dessus) absorbe le reste si jamais une taille de
+  police système inhabituelle dépasse malgré tout.
+*/
 
 /* Rond plein plutôt que le caractère "•" : sa taille ne dépend plus de la
    police système de la télé, qui le rendait minuscule quel que soit le
    font-size demandé. */
 .mark-dot {
   display: block;
-  width: 2.2vh;
-  height: 2.2vh;
+  width: calc(2.6vh * var(--card-scale, 1));
+  height: calc(2.6vh * var(--card-scale, 1));
   border-radius: 50%;
   background: var(--muted);
   opacity: 0.4;
 }
-.mark-slash, .mark-x { font-size: 4vh; font-weight: 800; color: var(--primary); }
+
+.mark-stroke {
+  display: block;
+  width: calc(4.6vh * var(--card-scale, 1));
+  height: calc(4.6vh * var(--card-scale, 1));
+  color: var(--primary);
+}
+.mark-stroke svg { width: 100%; height: 100%; display: block; }
 
 /* Fermé : un simple rond vert coché, sans texte "FERMÉ" — au même endroit et
-   à la même taille que les autres marques (point/slash/X), pour que l'œil
+   à la même taille que les autres marques (point/barre/croix), pour que l'œil
    parcoure la ligne sans changer d'échelle de lecture à chaque cellule. */
 .mark-closed {
-  width: 3.6vh;
-  height: 3.6vh;
+  width: calc(4.2vh * var(--card-scale, 1));
+  height: calc(4.2vh * var(--card-scale, 1));
   border-radius: 50%;
   background: var(--secondary);
   display: grid;
   place-items: center;
 }
-.mark-closed .icon { width: 2.1vh; height: 2.1vh; color: #fff; }
+.mark-closed .icon {
+  width: 62%;
+  height: 62%;
+  color: #fff;
+}
 
 /* Avatar dans l'en-tête de colonne Cricket. */
 .cricket-avatar {
@@ -730,11 +871,58 @@ html, body {
   100% { opacity: 1; transform: none; }
 }
 
+/*
+  Rayons et halo.
+
+  La modale n'était qu'un aplat orange qui tremble : lisible, mais sans relief,
+  alors que c'est le seul moment de la partie où l'écran a le droit d'en faire
+  trop. Les deux couches ci-dessous sont des dégradés fixes qu'on se contente de
+  tourner et de faire respirer — le compositeur s'en occupe seul, il n'y a aucun
+  repaint par frame, ce qui les rend jouables sur le Chromecast le plus modeste.
+*/
+.overlay-rays {
+  position: absolute;
+  /* Débordement volontaire : en tournant, un carré ajusté à la carte
+     laisserait apparaître ses coins vides. */
+  inset: -60%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.16) 0deg 6deg,
+    transparent 6deg 18deg
+  );
+  animation: rayspin 18s linear infinite;
+  pointer-events: none;
+}
+@keyframes rayspin {
+  to { transform: rotate(360deg); }
+}
+
+.overlay-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.42), transparent 62%);
+  animation: overlayBreath 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes overlayBreath {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
 .overlay-inner {
   position: relative;
   z-index: 1;
   text-align: center;
   padding: 4vh;
+}
+
+/* Emplacement du .lottie d'événement (couronne, game over). Dimensionné ici
+   plutôt que sur le lecteur : le nœud est créé puis détruit en JS, il ne doit
+   pas emporter sa mise en page avec lui. */
+.overlay-art {
+  width: 26vh;
+  height: 26vh;
+  margin: 0 auto;
 }
 
 .overlay-icon { font-size: 14vh; line-height: 1; }
@@ -749,3 +937,66 @@ html, body {
 }
 .overlay-name { font-size: 9vh; font-weight: 900; line-height: 1.05; color: #fff; }
 .overlay-sub { font-size: 2.6vh; color: rgba(255, 255, 255, 0.85); margin-top: 1vh; }
+
+/* ------------------------------------------------- HABILLAGES PAR ÉVÉNEMENT */
+
+/*
+  Sacre du roi : or profond plutôt que le jaune plat, texte gravé, et une
+  couronne qui domine. C'est l'écran le plus rare de la soirée, il a le droit
+  d'être le plus habillé.
+*/
+.overlay[data-flavor="king"] .overlay-card {
+  background: linear-gradient(160deg, #ffb300 0%, #ff8f00 45%, #e65100 100%);
+  box-shadow: 0 0 12vh rgba(255, 193, 7, 0.55);
+}
+.overlay[data-flavor="king"] .overlay-title {
+  font-size: 6vh;
+  color: #fff9e5;
+  text-shadow: 0 0.4vh 0 rgba(0, 0, 0, 0.25);
+}
+.overlay[data-flavor="king"] .overlay-name {
+  font-size: 11vh;
+  text-shadow: 0 0.5vh 1.2vh rgba(0, 0, 0, 0.3);
+}
+.overlay[data-flavor="king"] .overlay-art { width: 34vh; height: 34vh; }
+.overlay[data-flavor="king"] .overlay-rays { animation-duration: 11s; }
+
+/* Victoire ordinaire : même or, sans la surenchère du sacre. */
+.overlay[data-flavor="victory"] .overlay-card {
+  background: linear-gradient(160deg, #ffca28 0%, #ffa000 100%);
+}
+
+/*
+  Game over : l'exact inverse du sacre. Fond sombre au lieu du rouge vif —
+  le rouge plein donnait un panneau d'alerte, pas une sortie de jeu — halo
+  éteint, rayons quasi invisibles et nom barré comme sur la carte du joueur.
+*/
+.overlay[data-flavor="gameover"] .overlay-card {
+  background: linear-gradient(160deg, #2b0d14 0%, #7f0b23 60%, #b71c1c 100%);
+}
+.overlay[data-flavor="gameover"] .overlay-rays { opacity: 0.35; animation-duration: 30s; }
+.overlay[data-flavor="gameover"] .overlay-glow {
+  background: radial-gradient(circle at 50% 45%, rgba(255, 23, 68, 0.5), transparent 65%);
+}
+.overlay[data-flavor="gameover"] .overlay-title { color: #ff8a80; }
+.overlay[data-flavor="gameover"] .overlay-name {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.6vh;
+  text-decoration-color: rgba(255, 82, 82, 0.85);
+}
+
+/*
+  L'animation de game over est un écran d'arcade en pixel art, fond noir opaque
+  compris : posée telle quelle sur le dégradé, elle passait pour un rectangle
+  vide oublié là. On l'assume donc comme une borne — cadre, coins arrondis et
+  lueur rouge — au lieu d'essayer de cacher son fond.
+*/
+.overlay[data-flavor="gameover"] .overlay-art {
+  width: 46vh;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 1.6vh;
+  overflow: hidden;
+  border: 0.4vh solid rgba(255, 82, 82, 0.55);
+  box-shadow: 0 0 4vh rgba(255, 23, 68, 0.55);
+}
