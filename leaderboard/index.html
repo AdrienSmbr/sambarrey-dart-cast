@@ -44,8 +44,38 @@
       <div id="modeView" class="hidden">
         <div id="modeList" class="mode-list"></div>
       </div>
+
+      <p class="board-hint">Appuyez sur un joueur pour voir sa fiche détaillée.</p>
     </section>
   </main>
+
+  <!--
+    Fiche joueur, ouverte au clic sur n'importe quelle ligne du classement.
+    Reprend PlayerStatsDetailDialog de l'app : le même en-tête, les deux mêmes
+    onglets, les mêmes libellés — le contenu vient entièrement du document
+    Firestore, cette page ne calcule aucune statistique.
+  -->
+  <div id="playerSheet" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="sheetName">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div id="sheetAvatar" class="sheet-avatar"></div>
+        <div class="sheet-identity">
+          <h2 id="sheetName"></h2>
+          <p class="sheet-subtitle">Statistiques de carrière</p>
+        </div>
+        <button id="sheetClose" class="sheet-close" aria-label="Fermer la fiche">&times;</button>
+      </div>
+
+      <div id="sheetKpis" class="sheet-kpis"></div>
+
+      <div class="tabs sheet-tabs" role="tablist">
+        <button id="sheetTabPodium" class="tab active" role="tab" aria-selected="true">Podium</button>
+        <button id="sheetTabByMode" class="tab" role="tab" aria-selected="false">Détail par mode</button>
+      </div>
+
+      <div id="sheetBody" class="sheet-body"></div>
+    </div>
+  </div>
 
   <!-- Accueil joué une fois par visite, à la première réception du classement. -->
   <div id="welcome" class="overlay hidden">
