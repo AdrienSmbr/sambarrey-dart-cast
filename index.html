@@ -50,6 +50,22 @@
       </footer>
     </section>
 
+    <!-- CLASSEMENT D'OLYMPIADE -->
+    <section id="olympiad" class="olympiad hidden">
+      <header class="oly-header">
+        <div>
+          <h1 id="olyName" class="oly-title">Olympiade</h1>
+          <p id="olyDate" class="oly-date"></p>
+        </div>
+        <div class="oly-badge">Classement général</div>
+      </header>
+
+      <!-- Une seule grille : l'en-tête des épreuves et les lignes d'équipe
+           partagent les mêmes colonnes, sinon rien ne s'aligne d'une ligne à
+           l'autre dès qu'un nom d'équipe est plus long que les autres. -->
+      <div id="olyTable" class="oly-table"></div>
+    </section>
+
     <!-- SUPERPOSITIONS ÉVÉNEMENTIELLES (killer, élimination, victoire) -->
     <div id="overlay" class="overlay hidden">
       <div class="overlay-card">

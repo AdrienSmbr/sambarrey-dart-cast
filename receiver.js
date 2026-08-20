@@ -21,6 +21,10 @@ const el = (id) => document.getElementById(id);
 const dom = {
   idle: el('idle'),
   game: el('game'),
+  olympiad: el('olympiad'),
+  olyName: el('olyName'),
+  olyDate: el('olyDate'),
+  olyTable: el('olyTable'),
   matchTitle: el('matchTitle'),
   turnIndex: el('turnIndex'),
   turnBanner: el('turnBanner'),
@@ -95,9 +99,37 @@ function initials(name) {
   return (name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 
+/**
+ * Luminance relative WCAG d'une couleur hex, mêmes coefficients et même
+ * linéarisation sRGB que `Color.luminance()` côté app (Compose) : c'est ce
+ * calcul-là qui choisit noir ou blanc pour l'initiale sur l'avatar, et le
+ * bandeau doit trancher pareil pour rester le même produit que la tablette.
+ */
+function relativeLuminance(hex) {
+  const clean = (hex || '').replace('#', '');
+  // `#AARRGGBB` (format Android) aussi bien que `#RRGGBB` : on ne garde que
+  // les 6 derniers caractères, les canaux RVB.
+  const rgb = clean.length >= 6 ? clean.slice(-6) : '000000';
+  const channel = (value) => {
+    const c = parseInt(value, 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const r = channel(rgb.slice(0, 2));
+  const g = channel(rgb.slice(2, 4));
+  const b = channel(rgb.slice(4, 6));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Noir ou blanc, celui des deux qui se lit sur `hex` — voir `readableTextOn` côté app. */
+function readableTextOn(hex) {
+  return relativeLuminance(hex) > 0.45 ? '#14121a' : '#ffffff';
+}
+
 function renderTurn(state) {
   const color = state.activePlayerColor || '#FF6D00';
-  dom.turnAvatar.style.background = color;
+  const textColor = readableTextOn(color);
+  dom.turnBanner.style.setProperty('--player-color', color);
+  dom.turnBanner.style.setProperty('--player-text-color', textColor);
   dom.turnAvatar.textContent = initials(state.activePlayerName);
   dom.turnName.textContent = state.activePlayerName || '—';
   dom.matchTitle.textContent = state.matchTitle || '';
@@ -651,12 +683,14 @@ function render(state) {
   if (!state || !state.players || state.players.length === 0) {
     dom.idle.classList.remove('hidden');
     dom.game.classList.add('hidden');
+    dom.olympiad.classList.add('hidden');
     previous = null;
     playersLayoutKey = null;
     return;
   }
 
   dom.idle.classList.add('hidden');
+  dom.olympiad.classList.add('hidden');
   dom.game.classList.remove('hidden');
 
   // Une partie démarre : on va chercher le lecteur .lottie maintenant, pendant
@@ -685,7 +719,98 @@ function onMessage(payload) {
     render(null);
     return;
   }
+  if (payload.type === 'olympiad') {
+    renderOlympiad(payload);
+    return;
+  }
   render(payload);
+}
+
+// ----------------------------------------------------------- OLYMPIADE
+
+/**
+ * Classement d'une olympiade.
+ *
+ * Comme pour la partie, rien n'est calculé ici : places, points par épreuve et
+ * total arrivent déjà faits dans le message. Les épreuves elles-mêmes viennent
+ * du message, la page n'en connaît aucune — ajouter un sport à l'app ne demande
+ * donc pas de redéployer cette page.
+ */
+function renderOlympiad(payload) {
+  dom.idle.classList.add('hidden');
+  dom.game.classList.add('hidden');
+  dom.olympiad.classList.remove('hidden');
+
+  // On sort de l'écran de jeu : sans ça, revenir à une partie ne rejouerait ni
+  // le balayage ni les animations, l'état précédent étant resté « à jour ».
+  previous = null;
+  playersLayoutKey = null;
+
+  dom.olyName.textContent = payload.name || 'Olympiade';
+  dom.olyDate.textContent = payload.date || '';
+
+  const sports = payload.sports || [];
+  const teams = payload.teams || [];
+
+  dom.olyTable.style.setProperty('--oly-columns', String(Math.max(sports.length, 1)));
+  dom.olyTable.innerHTML = '';
+
+  if (teams.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'oly-empty';
+    empty.textContent = 'Aucune équipe pour l\'instant.';
+    dom.olyTable.appendChild(empty);
+    return;
+  }
+
+  const head = document.createElement('div');
+  head.className = 'oly-row oly-head';
+  head.innerHTML =
+    '<div></div><div>Équipe</div>' +
+    sports.map((sport) => `<div class="oly-cell">${escapeHtml(sport.label)}</div>`).join('') +
+    '<div class="oly-total">Total</div>';
+  dom.olyTable.appendChild(head);
+
+  teams.forEach((team) => {
+    const row = document.createElement('div');
+    row.className = 'oly-row oly-team' + (team.rank === 1 ? ' lead' : '');
+    row.style.setProperty('--team-color', team.color || 'var(--primary)');
+
+    const cells = sports.map((sport) => {
+      const score = (team.scores || {})[sport.key];
+      if (!score) return '<div class="oly-cell empty">—</div>';
+      return (
+        `<div class="oly-cell">${score.points}` +
+        `<span class="oly-value">${formatValue(score.value)}</span></div>`
+      );
+    });
+
+    row.innerHTML =
+      `<div class="oly-rank">${team.rank}</div>` +
+      '<div>' +
+      `<div class="oly-name">${escapeHtml(team.name)}</div>` +
+      `<div class="oly-members">${escapeHtml((team.members || []).join(', '))}</div>` +
+      '</div>' +
+      cells.join('') +
+      `<div class="oly-total">${team.total}</div>`;
+
+    dom.olyTable.appendChild(row);
+  });
+}
+
+/** Un score entier reste entier : « 2 », pas « 2.0 » — et « 1,5 » à la française. */
+function formatValue(value) {
+  if (typeof value !== 'number') return '';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');
+}
+
+/** Les noms d'équipe et de joueur viennent de la tablette : on les insère comme
+ *  du texte, jamais comme du HTML. */
+function escapeHtml(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // ---------------------------------------------------------------- CAST
@@ -929,14 +1054,74 @@ function startDemo() {
   setInterval(runStep, 2600);
 }
 
+/**
+ * Classement d'olympiade de démonstration, pour valider la page sans tablette.
+ *
+ * Les cas qui cassent une mise en page sont tous représentés : une épreuve non
+ * disputée, un demi-point de match nul, une équipe à quatre joueurs, et deux
+ * équipes à égalité de points.
+ */
+function startOlympiadDemo() {
+  renderOlympiad({
+    type: 'olympiad',
+    name: 'Olympiade du 15 août',
+    date: 'samedi 15 août 2026',
+    sports: [
+      { key: 'PING_PONG', label: 'Ping-pong', format: 'Au meilleur des 3 manches' },
+      { key: 'DARTS', label: 'Fléchettes', format: 'Calculé depuis les parties de l\'app' },
+      { key: 'VOLLEY', label: 'Volley', format: 'Au meilleur des 3 manches' },
+      { key: 'BABY_FOOT', label: 'Baby-foot', format: '2 manches (1-1 possible)' },
+      { key: 'PETANQUE', label: 'Pétanque', format: 'Un score par équipe' },
+    ],
+    teams: [
+      {
+        id: 1, name: 'Les Bleus', color: '#2196F3', rank: 1, total: 13,
+        members: ['Adrien', 'Laura'],
+        scores: {
+          PING_PONG: { points: 3, value: 2 },
+          DARTS: { points: 3, value: 11 },
+          VOLLEY: { points: 2, value: 1 },
+          BABY_FOOT: { points: 3, value: 1.5 },
+          PETANQUE: { points: 2, value: 11 },
+        },
+      },
+      {
+        id: 2, name: 'Les Rouges', color: '#E53935', rank: 2, total: 11,
+        members: ['Stéphane', 'Stéphanie', 'Père', 'Mère'],
+        scores: {
+          PING_PONG: { points: 2, value: 1 },
+          DARTS: { points: 2, value: 8 },
+          VOLLEY: { points: 3, value: 2 },
+          BABY_FOOT: { points: 1, value: 0.5 },
+          PETANQUE: { points: 3, value: 13 },
+        },
+      },
+      {
+        id: 3, name: 'Les Verts', color: '#43A047', rank: 3, total: 5,
+        members: ['Rémy', 'Julie'],
+        scores: {
+          PING_PONG: { points: 1, value: 0 },
+          DARTS: { points: 1, value: 4 },
+          VOLLEY: { points: 1, value: 0 },
+          BABY_FOOT: { points: 2, value: 1 },
+        },
+      },
+    ],
+  });
+}
+
 // ------------------------------------------------------------ DÉMARRAGE
 
 // Le SDK Cast se charge aussi dans un navigateur ordinaire : sa seule présence
 // ne prouve donc pas qu'on tourne sur un Chromecast. `?demo=1` force la partie
-// scriptée, ce qui permet de valider l'écran sans matériel.
+// scriptée, ce qui permet de valider l'écran sans matériel, et
+// `?demo=olympiad` fige le classement d'olympiade.
+const demoParam = new URLSearchParams(location.search).get('demo');
 const forceDemo = new URLSearchParams(location.search).has('demo');
 
-if (!forceDemo && typeof cast !== 'undefined' && cast.framework) {
+if (demoParam === 'olympiad') {
+  startOlympiadDemo();
+} else if (!forceDemo && typeof cast !== 'undefined' && cast.framework) {
   try {
     startCast();
   } catch (error) {
