@@ -35,11 +35,11 @@ const dom = {
   checkout: el('checkout'),
   bust: el('bust'),
   overlay: el('overlay'),
-  overlayArt: el('overlayArt'),
   overlayIcon: el('overlayIcon'),
   overlayTitle: el('overlayTitle'),
   overlayName: el('overlayName'),
   overlaySub: el('overlaySub'),
+  turnLabel: document.querySelector('.turn-label'),
   sweep: el('sweep'),
   app: el('app'),
 };
@@ -64,27 +64,23 @@ const TALLY_BAR = '<svg class="bar" viewBox="0 0 10 32" fill="currentColor"><rec
 const MARK_SLASH = '<span class="mark-stroke mark-slash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><line x1="6" y1="19" x2="18" y2="5"/></svg></span>';
 const MARK_X = '<span class="mark-stroke mark-x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><line x1="5.5" y1="18.5" x2="18.5" y2="5.5"/><line x1="5.5" y1="5.5" x2="18.5" y2="18.5"/></svg></span>';
 
+/** Couleurs d'équipe de la démo : mêmes valeurs que `TeamPalette` côté app. */
+const TEAM_COLORS = ['#1E88E5', '#E53935', '#43A047', '#FB8C00'];
+
 /** Ordre standard des cibles Cricket, repris si l'app ne le précise pas. */
 const DEFAULT_CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
 
-/**
- * Animations d'événement, jouées une seule fois sur la modale plein écran.
+/*
+ * Plus aucun .lottie sur cette page.
  *
- * Ce sont les deux seuls .lottie de la page. Le reste du rendu est du CSS pur :
- * un lecteur canvas/WASM qui tourne en permanence met un Chromecast d'entrée de
- * gamme à genoux, mais trois secondes toutes les dix minutes ne coûtent rien.
+ * Les deux animations d'événement (couronne, game over) passaient par un
+ * lecteur canvas/WASM chargé depuis un CDN. Même joué trois secondes, il
+ * saccade sur le Chromecast réellement utilisé — et il arrive au pire moment,
+ * pile quand l'écran doit être net. L'icône est désormais un SVG animé en CSS
+ * (`transform`/`opacity` seulement, les deux propriétés que le compositeur
+ * traite sans repasser par la mise en page), ce qui supprime du même coup une
+ * dépendance réseau au milieu d'une partie.
  */
-const OVERLAY_ART = {
-  crown: 'assets/lottie/crown.lottie',
-  gameOver: 'assets/lottie/game_over.lottie',
-};
-
-/** Version figée, comme sur la page du classement : une mise à jour amont ne
- *  doit pas pouvoir casser l'écran de la télé du jour au lendemain. */
-const LOTTIE_PLAYER_SRC = 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-wc@0.9.25/dist/dotlottie-wc.js';
-
-/** Promesse de chargement du lecteur, lancée une seule fois. */
-let lottiePlayerLoad = null;
 
 /** Dernier état reçu, pour ne réagir qu'aux vraies transitions. */
 let previous = null;
@@ -130,8 +126,15 @@ function renderTurn(state) {
   const textColor = readableTextOn(color);
   dom.turnBanner.style.setProperty('--player-color', color);
   dom.turnBanner.style.setProperty('--player-text-color', textColor);
-  dom.turnAvatar.textContent = initials(state.activePlayerName);
+  // L'app envoie ce que doit porter la pastille : le numéro d'équipe en duo,
+  // sinon « Équipe 2 » et « Équipe 3 » afficheraient le même « É ».
+  dom.turnAvatar.textContent = initials(state.activePlayerInitial || state.activePlayerName);
   dom.turnName.textContent = state.activePlayerName || '—';
+  // « au tour de l'Équipe 2 », mais « au tour de Élodie » : l'app dit quand il
+  // s'agit d'une équipe, la page ne le devine pas du nom.
+  const isTeamTurn = state.activeTeamNumber !== null && state.activeTeamNumber !== undefined;
+  dom.turnLabel.textContent = isTeamTurn ? "au tour de l'" : 'au tour de';
+  dom.turnLabel.classList.toggle('elided', isTeamTurn);
   dom.matchTitle.textContent = state.matchTitle || '';
   dom.turnIndex.textContent = state.turnIndex ? `Tour ${state.turnIndex}` : '';
 }
@@ -218,10 +221,14 @@ function updateCard(card, player, state) {
   card.classList.toggle('killer-status', isKiller && !!player.isKiller && !player.isEliminated);
   card.classList.toggle('eliminated-status', isKiller && !!player.isEliminated);
 
-  // En duo la carte porte une équipe : pas d'avatar unique en tête, mais la
-  // liste des coéquipiers dessous, celui qui lance étant mis en avant — c'est
-  // la composition de TeamScoreCard côté app.
+  // En duo la carte porte une équipe : pas d'avatar unique en tête, mais ses
+  // joueurs dessous — c'est la composition de TeamScoreCard côté app. Aucun
+  // n'est désigné comme lanceur : en équipe, l'ordre ne compte pas, on décide
+  // sur le moment qui lance.
   const members = Array.isArray(player.members) ? player.members : null;
+  // Killer duo : chaque coéquipier garde SON chiffre et SES vies, et c'est
+  // justement en les lisant côte à côte qu'on choisit lequel abattre.
+  const killerMembers = isKiller && !!members;
   card.classList.toggle('team-card', !!members);
 
   const avatar = card.querySelector('.avatar');
@@ -240,15 +247,20 @@ function updateCard(card, player, state) {
   // périmé en mémoire au lieu d'être remplacé.
   const memberBox = card.querySelector('.members');
   memberBox.classList.toggle('hidden', !members);
-  memberBox.innerHTML = members ? members.map((member) => `
-      <span class="member${member.isThrowing ? ' throwing' : ''}">
+  memberBox.classList.toggle('killer-members', killerMembers);
+  memberBox.innerHTML = members ? members.map((member) => (killerMembers
+    ? killerMemberHtml(member)
+    : `
+      <span class="member">
         <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
         <span class="member-name">${member.name || ''}</span>
       </span>
-    `).join('') : '';
+    `)).join('') : '';
 
+  // La cible au centre n'a de sens que pour un joueur seul : en duo l'équipe en
+  // a deux, portées par les lignes de ses joueurs.
   const pill = card.querySelector('.target-pill');
-  pill.classList.toggle('hidden', !isKiller);
+  pill.classList.toggle('hidden', !isKiller || killerMembers);
   pill.querySelector('.killer-target-num').textContent = player.targetNumber ?? '—';
 
   const score = card.querySelector('.score');
@@ -275,6 +287,28 @@ function updateCard(card, player, state) {
   } else if (badge) {
     badge.remove();
   }
+}
+
+/**
+ * Une ligne de joueur dans la carte d'une équipe au Killer duo.
+ *
+ * Chiffre et vies restent attachés au joueur : le duo n'a rien en commun, sinon
+ * de tomber ensemble. Un chiffre abattu grise sa ligne sans la retirer — son
+ * joueur lance toujours, il n'a simplement plus de cible à défendre.
+ */
+function killerMemberHtml(member) {
+  const lives = member.isEliminated
+    ? `${ICONS.eliminated}<span>ÉLIMINÉ</span>`
+    : `${ICONS.heart}<span>${member.lives ?? 0}</span>`;
+
+  return `
+    <span class="member killer-member${member.isEliminated ? ' out' : ''}">
+      <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
+      <span class="member-name">${member.name || ''}</span>
+      <span class="member-target">N° ${member.targetNumber ?? '—'}</span>
+      <span class="member-lives">${lives}</span>
+    </span>
+  `;
 }
 
 /** Reproduit KillerStatusBadge() : 4 variantes exactement comme côté app. */
@@ -443,66 +477,14 @@ function quake() {
   replayAnimation(dom.app, 'quake');
 }
 
-/**
- * Charge le lecteur .lottie, au plus une fois par session.
- *
- * Appelé dès qu'une partie démarre et non au moment de l'événement : le module
- * et son WASM mettent une bonne seconde à arriver sur un Chromecast, ce qui
- * ferait rater l'animation à la victoire — l'unique moment où elle sert.
- */
-function ensureLottiePlayer() {
-  if (!lottiePlayerLoad) {
-    lottiePlayerLoad = import(LOTTIE_PLAYER_SRC).catch((error) => {
-      // Rien de bloquant : l'icône SVG reste affichée à la place.
-      console.warn('Lecteur .lottie indisponible, repli sur les icônes', error);
-      return null;
-    });
-  }
-  return lottiePlayerLoad;
-}
-
-/**
- * Remplace l'icône SVG par l'animation, si et seulement si le lecteur est déjà
- * prêt et que la modale demandée est toujours celle affichée.
- */
-function playOverlayArt(artKey) {
-  const src = OVERLAY_ART[artKey];
-  if (!src) return;
-
-  const token = overlayTimer;
-  ensureLottiePlayer().then(() => {
-    // Le lecteur est arrivé après la fermeture de la modale, ou une autre
-    // modale a pris sa place entre-temps : on ne rattrape rien. Sans ces
-    // gardes, un canvas WASM se retrouverait attaché à une modale invisible,
-    // sans plus rien pour le détruire.
-    if (!customElements.get('dotlottie-wc')) return;
-    if (overlayTimer !== token || dom.overlay.classList.contains('hidden')) return;
-
-    const player = document.createElement('dotlottie-wc');
-    player.setAttribute('src', src);
-    player.setAttribute('autoplay', '');
-    // Pas de `loop` : l'animation accompagne un moment, elle ne meuble pas.
-    player.style.width = '100%';
-    player.style.height = '100%';
-
-    dom.overlayArt.innerHTML = '';
-    dom.overlayArt.appendChild(player);
-    dom.overlayArt.classList.remove('hidden');
-    dom.overlayIcon.classList.add('hidden');
-  });
-}
-
-function clearOverlayArt() {
-  dom.overlayArt.innerHTML = '';
-  dom.overlayArt.classList.add('hidden');
-}
-
-function showOverlay({ icon, art, title, name, sub, color, duration = 2800, flavor = '' }) {
+function showOverlay({ icon, title, name, sub, color, duration = 2800, flavor = '' }) {
   clearTimeout(overlayTimer);
-  clearOverlayArt();
 
   dom.overlayIcon.innerHTML = icon || '';
   dom.overlayIcon.classList.remove('hidden');
+  // Rejouée à chaque ouverture : l'icône entre en scène plutôt que d'être
+  // simplement là. C'est ce que la couronne animée apportait, en CSS.
+  replayAnimation(dom.overlayIcon, 'art-in');
 
   dom.overlayTitle.textContent = title;
   dom.overlayName.textContent = name || '';
@@ -520,10 +502,7 @@ function showOverlay({ icon, art, title, name, sub, color, duration = 2800, flav
   overlayTimer = setTimeout(() => {
     dom.overlay.classList.add('hidden');
     dom.game.classList.remove('quaking');
-    clearOverlayArt();
   }, duration);
-
-  if (art) playOverlayArt(art);
 }
 
 /** Compare l'état reçu au précédent pour déclencher les effets qui vont bien. */
@@ -563,7 +542,6 @@ function handleEvent(event) {
     case 'eliminated':
       showOverlay({
         icon: ICONS.eliminated,
-        art: 'gameOver',
         // « Game over » est déjà écrit dans l'animation : le répéter en titre
         // ferait lire deux fois la même chose au même endroit.
         title: 'Éliminé',
@@ -581,7 +559,6 @@ function handleEvent(event) {
       const king = !!event.isKing;
       showOverlay({
         icon: ICONS.trophy,
-        art: 'crown',
         title: king ? 'Gloire au roi' : 'Victoire',
         name: event.player,
         sub: event.subtitle || (king ? 'Longue vie au roi' : ''),
@@ -692,11 +669,6 @@ function render(state) {
   dom.idle.classList.add('hidden');
   dom.olympiad.classList.add('hidden');
   dom.game.classList.remove('hidden');
-
-  // Une partie démarre : on va chercher le lecteur .lottie maintenant, pendant
-  // qu'il ne se passe rien, pour qu'il soit prêt à la première élimination.
-  // Le demander au moment de l'événement le ferait arriver trop tard.
-  ensureLottiePlayer();
 
   renderTurn(state);
   renderDarts(state);
@@ -944,7 +916,8 @@ function startDemo() {
 
   // -------------------------------------------------- 501 DUO (8 joueurs)
   // Une carte par ÉQUIPE, pas par joueur : les coéquipiers partagent un seul
-  // score, et seul celui qui a les fléchettes est mis en avant.
+  // score, et personne n'est désigné comme lanceur — en équipe l'ordre ne
+  // compte pas, on décide sur le moment qui lance.
   {
     const roster = BIG.slice(0, 8);
     const teamOf = (index) => Math.floor(index / 2) + 1;
@@ -957,16 +930,19 @@ function startDemo() {
       const active = teamOf(thrower);
       return {
         type: 'state', mode: 'x01', matchTitle: '501 duo', turnIndex: 1,
-        // Le bandeau nomme la personne qui lance, la carte porte l'équipe.
+        // Le bandeau nomme l'ÉQUIPE, avec sa couleur : c'est elle qui prend son
+        // tour, ses joueurs s'arrangent entre eux.
         activePlayerId: roster[thrower].id,
-        activePlayerName: roster[thrower].name,
-        activePlayerColor: roster[thrower].color,
+        activePlayerName: `Équipe ${active}`,
+        activePlayerInitial: String(active),
+        activeTeamNumber: active,
+        activePlayerColor: TEAM_COLORS[active - 1],
         activePlayerRemainingScore: scores[active],
         currentDarts: darts.slice(),
         players: teams.map((team) => ({
           id: -team,
           name: `Équipe ${team}`,
-          color: '#FF6D00',
+          color: TEAM_COLORS[team - 1],
           isActive: team === active,
           score: scores[team],
           members: roster
@@ -975,7 +951,6 @@ function startDemo() {
               id: member.id,
               name: member.name,
               color: member.color,
-              isThrowing: member.id === roster[thrower].id,
             })),
         })),
         ...extra,
@@ -1037,6 +1012,74 @@ function startDemo() {
       () => { active = 0; lives[8].touches = 1; render(snap()); },
       () => { lives[8].touches = 0; lives[8].isEliminated = true; render(snap({ event: { kind: 'eliminated', player: 'Élodie' } })); },
       () => { render(snap()); },
+    );
+  }
+
+  // ------------------------------------------- KILLER DUO (3 équipes de 2)
+  // Le cas qui n'existe qu'ici : deux chiffres et deux lots de vies dans un
+  // même cadre, et un chiffre abattu qui ne sort PAS son équipe — elle joue
+  // jusqu'à perdre les deux, ses deux joueurs continuant de lancer.
+  {
+    const roster = BIG.slice(0, 6);
+    const teamOf = (index) => Math.floor(index / 2) + 1;
+    const teams = [1, 2, 3];
+    const state = {};
+    roster.forEach((p, i) => { state[p.id] = { targetNumber: (i * 3) + 1, lives: 5, isEliminated: false }; });
+    let activeTeam = 1;
+
+    const membersOf = (team) => roster
+      .filter((_, index) => teamOf(index) === team)
+      .map((member) => ({
+        id: member.id,
+        name: member.name,
+        color: member.color,
+        ...state[member.id],
+      }));
+
+    const snap = (extra = {}) => ({
+      type: 'state', mode: 'killer', matchTitle: 'Killer compétitif duo', turnIndex: 4,
+      isCompetitive: true,
+      activePlayerId: -activeTeam,
+      activePlayerName: `Équipe ${activeTeam}`,
+      activePlayerInitial: String(activeTeam),
+      activeTeamNumber: activeTeam,
+      activePlayerColor: TEAM_COLORS[activeTeam - 1],
+      currentDarts: [],
+      players: teams.map((team) => {
+        const members = membersOf(team);
+        return {
+          id: -team,
+          name: `Équipe ${team}`,
+          color: TEAM_COLORS[team - 1],
+          isActive: team === activeTeam,
+          isEliminated: members.every((member) => member.isEliminated),
+          lives: members.reduce((total, member) => total + member.lives, 0),
+          members,
+        };
+      }),
+      ...extra,
+    });
+
+    const idOf = (index) => roster[index].id;
+
+    script.push(
+      () => { state[idOf(2)].lives = 2; render(snap()); },
+      () => { activeTeam = 2; state[idOf(0)].lives = 4; render(snap()); },
+      // Un chiffre tombe : son équipe reste en jeu avec l'autre.
+      () => {
+        activeTeam = 3;
+        state[idOf(2)].lives = 0;
+        state[idOf(2)].isEliminated = true;
+        render(snap({ event: { kind: 'eliminated', player: roster[2].name } }));
+      },
+      () => { activeTeam = 1; state[idOf(4)].lives = 3; render(snap()); },
+      // Le second chiffre de l'équipe 2 tombe : cette fois elle est sortie.
+      () => {
+        state[idOf(3)].lives = 0;
+        state[idOf(3)].isEliminated = true;
+        render(snap({ event: { kind: 'eliminated', player: roster[3].name } }));
+      },
+      () => { activeTeam = 3; render(snap()); },
     );
   }
 

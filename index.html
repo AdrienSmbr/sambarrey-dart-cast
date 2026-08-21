@@ -74,9 +74,6 @@
         <div class="overlay-rays" aria-hidden="true"></div>
         <div class="overlay-glow" aria-hidden="true"></div>
         <div class="overlay-inner">
-          <!-- Le Lottie prend la place de l'icône SVG quand le lecteur est
-               prêt ; l'icône reste le repli, jamais les deux à la fois. -->
-          <div id="overlayArt" class="overlay-art hidden"></div>
           <div id="overlayIcon" class="overlay-icon"></div>
           <div id="overlayTitle" class="overlay-title">NOUVEAU KILLER</div>
           <div id="overlayName" class="overlay-name">Adrien</div>
@@ -92,11 +89,11 @@
     est fait maison en CSS/JS pur pour ne rien coûter à un Chromecast d'entrée
     de gamme.
 
-    Le lecteur .lottie (canvas/WASM) revient uniquement pour les deux
-    animations d'événement (couronne de victoire, game over) : il est chargé à
-    la demande par receiver.js, joué une fois, puis retiré du DOM. C'est
-    l'inverse de ce qui avait été supprimé — un lecteur qui tournait en
-    permanence derrière les cartes.
+    Le SDK Cast est désormais la SEULE dépendance externe : le lecteur .lottie
+    (canvas/WASM, chargé depuis un CDN) a été retiré. Même joué trois secondes,
+    il saccadait sur le Chromecast réellement utilisé, pile au moment où
+    l'écran doit être net — et il faisait dépendre une animation de fin de
+    partie d'un aller-retour réseau.
 
     Le SDK Cast est absent en navigateur : le mode démo prend alors le relais.
   -->

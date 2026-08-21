@@ -136,15 +136,17 @@ html, body {
 .match-turn { font-size: 1.8vh; color: var(--muted); margin-top: 0.6vh; }
 
 /*
-  Bandeau « au tour de » : pilule remplie de la couleur du joueur, pas d'une
-  teinte du thème — c'est la même couleur que son avatar, pas une
-  interprétation de celle-ci (voir CurrentTurnBanner.kt côté app, qui a le
-  même défaut corrigé de la même façon : rapprocher la couleur du thème pour
-  la rendre lisible la rendait méconnaissable à côté de l'avatar).
+  Bandeau « au tour de » : pilule à peine teintée de la couleur du joueur —
+  un repère posé sur l'écran, pas un bloc de couleur qui écrase la barre du
+  haut (même choix que CurrentTurnBanner.kt côté app).
 
-  Le texte bascule en noir ou blanc selon cette couleur (readableTextOn), la
-  bordure PULSE EN OPACITÉ dans cette même teinte de texte (0.55 -> 1, comme
-  rememberInfiniteTransition côté app) — jamais de flou, l'app n'en a aucun.
+  La couleur qui se lit est celle du TEXTE et du liseré, et c'est bien celle
+  du joueur : elle arrivait auparavant en ARGB brut, lue par le CSS comme du
+  RGBA, ce qui affichait un joueur en vert dans une toute autre teinte. La
+  conversion se fait maintenant côté app (`webColor`).
+
+  La bordure PULSE EN OPACITÉ (0.55 -> 1, comme rememberInfiniteTransition
+  côté app) — jamais de flou, l'app n'en a aucun.
 */
 .turn-banner {
   flex: 1;
@@ -154,13 +156,13 @@ html, body {
   gap: 1.2vw;
   padding: 1.2vh 2vw;
   border-radius: 99px;
-  background: var(--player-color, var(--primary));
-  border: 0.28vh solid var(--player-text-color, #fff);
+  background: color-mix(in srgb, var(--player-color, var(--primary)) 16%, transparent);
+  border: 0.28vh solid var(--player-color, var(--primary));
   animation: turnPulse 1.1s ease-in-out infinite alternate;
 }
 @keyframes turnPulse {
-  from { border-color: color-mix(in srgb, var(--player-text-color, #fff) 55%, transparent); }
-  to { border-color: var(--player-text-color, #fff); }
+  from { border-color: color-mix(in srgb, var(--player-color, var(--primary)) 55%, transparent); }
+  to { border-color: var(--player-color, var(--primary)); }
 }
 
 .turn-avatar {
@@ -173,7 +175,6 @@ html, body {
   font-weight: 700;
   background: var(--player-color, var(--primary));
   color: var(--player-text-color, #fff);
-  border: 0.2vh solid color-mix(in srgb, var(--player-text-color, #fff) 25%, transparent);
   flex: none;
 }
 
@@ -183,16 +184,19 @@ html, body {
 .turn-label {
   font-size: 2.8vh;
   font-weight: 800;
-  color: var(--player-text-color, #fff);
-  opacity: 0.85;
+  color: var(--muted);
 }
+
+/* « au tour de l'Équipe 2 » : l'apostrophe se colle au nom, l'espace du
+   bandeau la ferait flotter entre les deux mots. */
+.turn-label.elided { margin-right: -1.2vw; }
 
 .turn-name {
   font-size: 4.6vh;
   font-weight: 900;
   letter-spacing: -0.01em;
   white-space: nowrap;
-  color: var(--player-text-color, #fff);
+  color: var(--player-color, var(--primary));
   text-transform: uppercase;
 }
 
@@ -447,12 +451,13 @@ html, body {
 .card > .foot { position: relative; z-index: 1; }
 
 /*
-  Duo : la carte porte une équipe. Le nom d'équipe prend l'accent `primary`
-  (l'app fait pareil : une équipe n'appartient à aucun joueur, donc pas de
-  couleur perso), et les coéquipiers défilent dessous, le lanceur en gras.
+  Duo : la carte porte une équipe, avec SA couleur (voir TeamPalette côté app :
+  une équipe n'appartient à aucun joueur, mais deux équipes de la même couleur
+  ne diraient plus rien). Ses joueurs défilent dessous, aucun n'étant désigné
+  comme lanceur : l'ordre ne compte pas, l'équipe décide sur le moment.
 */
 .card.team-card .name {
-  color: var(--primary);
+  color: var(--player-color, var(--primary));
   font-size: 2.2vh;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -489,9 +494,48 @@ html, body {
   white-space: nowrap;
 }
 
-/* Celui qui a les fléchettes en main ressort, comme dans TeamScoreCard. */
-.member.throwing .member-name { color: var(--primary); font-weight: 800; }
-.member-avatar.throwing { outline: 0.3vh solid var(--primary); outline-offset: 0.2vh; }
+/*
+  Killer duo : une ligne par joueur, avec son chiffre et ses vies. Empilées et
+  non en ligne — c'est la comparaison des deux cibles qui décide laquelle
+  attaquer, elle doit se lire de haut en bas d'un seul coup d'œil.
+*/
+.killer-members { flex-direction: column; gap: 0.8vh; margin-top: 1.2vh; }
+
+.killer-member {
+  width: 100%;
+  gap: 0.8vw;
+  padding: 0.7vh 1vh;
+  border-radius: 1vh;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.killer-member .member-name { flex: 1; font-weight: 700; color: var(--text); }
+
+.killer-member .member-target {
+  padding: 0.2vh 0.8vh;
+  border-radius: 0.7vh;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  font-size: 2vh;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.killer-member .member-lives {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4vw;
+  color: var(--danger);
+  font-size: 2.1vh;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Chiffre abattu : la ligne s'éteint mais reste là, son joueur lance toujours. */
+.killer-member.out { opacity: 0.45; }
+.killer-member.out .member-lives { font-size: 1.7vh; }
 
 .cricket-members { gap: 0.4vw; }
 
@@ -924,17 +968,31 @@ html, body {
   padding: 4vh;
 }
 
-/* Emplacement du .lottie d'événement (couronne, game over). Dimensionné ici
-   plutôt que sur le lecteur : le nœud est créé puis détruit en JS, il ne doit
-   pas emporter sa mise en page avec lui. */
-.overlay-art {
-  width: 26vh;
-  height: 26vh;
-  margin: 0 auto;
-}
+/*
+  Entrée de l'icône, à la place de l'animation dessinée.
 
+  Elle arrive en tournant légèrement et en dépassant sa taille finale, puis se
+  pose — c'est ce que la couronne apportait, obtenu avec les deux seules
+  propriétés qu'un Chromecast compose sans effort. Un battement lent prend le
+  relais pour que la carte ne soit pas figée pendant ses trois secondes.
+*/
 .overlay-icon { font-size: 14vh; line-height: 1; }
 .overlay-icon .icon { width: 12vh; height: 12vh; color: #fff; }
+
+.overlay-icon.art-in { animation: artIn 620ms cubic-bezier(.2,.9,.25,1.35) both; }
+.overlay-icon.art-in .icon { animation: artBeat 2.2s ease-in-out 620ms infinite; }
+
+@keyframes artIn {
+  from { opacity: 0; transform: scale(0.35) rotate(-22deg); }
+  60%  { opacity: 1; transform: scale(1.12) rotate(4deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes artBeat {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.07); }
+}
+
 .overlay-title {
   font-size: 4.6vh;
   font-weight: 900;
@@ -966,7 +1024,7 @@ html, body {
   font-size: 11vh;
   text-shadow: 0 0.5vh 1.2vh rgba(0, 0, 0, 0.3);
 }
-.overlay[data-flavor="king"] .overlay-art { width: 34vh; height: 34vh; }
+.overlay[data-flavor="king"] .overlay-icon .icon { width: 17vh; height: 17vh; }
 .overlay[data-flavor="king"] .overlay-rays { animation-duration: 11s; }
 
 /* Victoire ordinaire : même or, sans la surenchère du sacre. */
@@ -991,22 +1049,6 @@ html, body {
   text-decoration: line-through;
   text-decoration-thickness: 0.6vh;
   text-decoration-color: rgba(255, 82, 82, 0.85);
-}
-
-/*
-  L'animation de game over est un écran d'arcade en pixel art, fond noir opaque
-  compris : posée telle quelle sur le dégradé, elle passait pour un rectangle
-  vide oublié là. On l'assume donc comme une borne — cadre, coins arrondis et
-  lueur rouge — au lieu d'essayer de cacher son fond.
-*/
-.overlay[data-flavor="gameover"] .overlay-art {
-  width: 46vh;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  border-radius: 1.6vh;
-  overflow: hidden;
-  border: 0.4vh solid rgba(255, 82, 82, 0.55);
-  box-shadow: 0 0 4vh rgba(255, 23, 68, 0.55);
 }
 
 /* ------------------------------------------------------------- OLYMPIADE */
