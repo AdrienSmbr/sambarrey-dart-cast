@@ -204,6 +204,7 @@ function buildCard() {
         <span class="killer-target-label">Cible</span>
         <span class="killer-target-num"></span>
       </div>
+      <div class="killer-targets hidden"></div>
     </div>
     <div class="foot"></div>
   `;
@@ -247,21 +248,22 @@ function updateCard(card, player, state) {
   // périmé en mémoire au lieu d'être remplacé.
   const memberBox = card.querySelector('.members');
   memberBox.classList.toggle('hidden', !members);
-  memberBox.classList.toggle('killer-members', killerMembers);
-  memberBox.innerHTML = members ? members.map((member) => (killerMembers
-    ? killerMemberHtml(member)
-    : `
+  memberBox.innerHTML = members ? members.map((member) => `
       <span class="member">
         <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
         <span class="member-name">${member.name || ''}</span>
       </span>
-    `)).join('') : '';
+    `).join('') : '';
 
-  // La cible au centre n'a de sens que pour un joueur seul : en duo l'équipe en
-  // a deux, portées par les lignes de ses joueurs.
+  // La cible unique au centre ne vaut que pour un joueur seul : en duo l'équipe
+  // en a deux, posées côte à côte au même endroit.
   const pill = card.querySelector('.target-pill');
   pill.classList.toggle('hidden', !isKiller || killerMembers);
   pill.querySelector('.killer-target-num').textContent = player.targetNumber ?? '—';
+
+  const targets = card.querySelector('.killer-targets');
+  targets.classList.toggle('hidden', !killerMembers);
+  targets.innerHTML = killerMembers ? members.map(killerTargetHtml).join('') : '';
 
   const score = card.querySelector('.score');
   const next = String(player.score ?? 0);
@@ -290,23 +292,20 @@ function updateCard(card, player, state) {
 }
 
 /**
- * Une ligne de joueur dans la carte d'une équipe au Killer duo.
+ * Un chiffre de l'équipe et les vies qui lui restent, au centre de la carte.
  *
- * Chiffre et vies restent attachés au joueur : le duo n'a rien en commun, sinon
- * de tomber ensemble. Un chiffre abattu grise sa ligne sans la retirer — son
- * joueur lance toujours, il n'a simplement plus de cible à défendre.
+ * C'est l'information qui décide de la volée : le duo ne met rien en commun,
+ * deux chiffres et deux lots de vies, et c'est en les comparant qu'on choisit
+ * lequel abattre. Elle prend donc la place qu'occupe le score au 301 duo.
+ *
+ * À zéro le chiffre est barré, pas retiré : il ne compte plus, mais son joueur
+ * lance toujours — le faire disparaître le sortirait de la partie.
  */
-function killerMemberHtml(member) {
-  const lives = member.isEliminated
-    ? `${ICONS.eliminated}<span>ÉLIMINÉ</span>`
-    : `${ICONS.heart}<span>${member.lives ?? 0}</span>`;
-
+function killerTargetHtml(member) {
   return `
-    <span class="member killer-member${member.isEliminated ? ' out' : ''}">
-      <span class="member-avatar" style="background:${member.color || '#FF6D00'}">${initials(member.name)}</span>
-      <span class="member-name">${member.name || ''}</span>
-      <span class="member-target">N° ${member.targetNumber ?? '—'}</span>
-      <span class="member-lives">${lives}</span>
+    <span class="killer-target${member.isEliminated ? ' out' : ''}">
+      <span class="killer-target-n">N° ${member.targetNumber ?? '—'}</span>
+      <span class="killer-target-lives">${member.lives ?? 0}</span>
     </span>
   `;
 }

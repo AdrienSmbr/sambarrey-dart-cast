@@ -258,6 +258,18 @@ html, body {
 .players[data-count="many"] { --card-scale: 0.74; }
 
 /*
+  Les chiffres du Killer duo ne suivent pas `--card-scale` : ils sont DEUX par
+  carte, et à partir de quatre équipes la grille passe sur deux rangées, ce qui
+  divise la hauteur de carte par deux quand l'échelle, elle, ne baisse que d'un
+  tiers. Réglés sur la seule échelle, ils débordaient sur les prénoms et sur le
+  total. D'où une taille par nombre d'équipes, et non par échelle.
+*/
+.players { --killer-digit: 9vh; --killer-label: 3vh; }
+.players[data-count="1"],
+.players[data-count="2"],
+.players[data-count="3"] { --killer-digit: 14vh; --killer-label: 4.4vh; }
+
+/*
   Carte X01 / Killer : rayon 16dp -> 2.2vh, bordure de 3dp au repos, fond
   surfaceVariant, primaryContainer(alpha) quand active. Aucune ombre, aucun
   flou. La bordure colorée ne dit qu'une chose — "c'est son tour" — quel que
@@ -495,47 +507,47 @@ html, body {
 }
 
 /*
-  Killer duo : une ligne par joueur, avec son chiffre et ses vies. Empilées et
-  non en ligne — c'est la comparaison des deux cibles qui décide laquelle
-  attaquer, elle doit se lire de haut en bas d'un seul coup d'œil.
+  Killer duo : les chiffres de l'équipe et leurs vies, au centre de la carte —
+  là où le 301 duo pose son score. C'est ce qui décide de la volée, il faut
+  pouvoir comparer les deux d'un coup d'œil.
+
+  À la taille du score du 301 duo : ce sont les mêmes chiffres, ceux qu'on lit
+  depuis le canapé. Ils étaient deux fois plus petits, perdus au milieu d'une
+  carte vide, alors que ce sont eux qui décident où viser.
 */
-.killer-members { flex-direction: column; gap: 0.8vh; margin-top: 1.2vh; }
-
-.killer-member {
-  width: 100%;
-  gap: 0.8vw;
-  padding: 0.7vh 1vh;
-  border-radius: 1vh;
-  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+.killer-targets {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: calc(4vw * var(--card-scale, 1));
 }
 
-.killer-member .member-name { flex: 1; font-weight: 700; color: var(--text); }
+.killer-target { display: grid; justify-items: center; gap: 0.6vh; }
 
-.killer-member .member-target {
-  padding: 0.2vh 0.8vh;
-  border-radius: 0.7vh;
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
+.killer-target-n {
+  font-size: calc(var(--killer-label) * var(--card-scale, 1));
+  font-weight: 800;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.killer-target-lives {
+  font-size: calc(var(--killer-digit) * var(--card-scale, 1));
+  font-weight: 900;
+  line-height: 1;
   color: var(--primary);
-  font-size: 2vh;
-  font-weight: 900;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.killer-member .member-lives {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4vw;
-  color: var(--danger);
-  font-size: 2.1vh;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* Chiffre à zéro : barré, pas retiré. Il ne compte plus, mais son joueur lance
+   toujours — l'effacer reviendrait à le sortir de la partie. */
+.killer-target.out { opacity: 0.4; }
+.killer-target.out .killer-target-n,
+.killer-target.out .killer-target-lives {
+  text-decoration: line-through;
+  text-decoration-thickness: 0.7vh;
+  text-decoration-color: var(--danger);
 }
-
-/* Chiffre abattu : la ligne s'éteint mais reste là, son joueur lance toujours. */
-.killer-member.out { opacity: 0.45; }
-.killer-member.out .member-lives { font-size: 1.7vh; }
 
 .cricket-members { gap: 0.4vw; }
 
